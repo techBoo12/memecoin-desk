@@ -39,6 +39,7 @@ export function stats(state) {
 
 export function dailyReport(state, run, status, config) {
   const s = stats(state);
+  const allHits = Object.entries(run.allHitsByRule || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ') || 'none';
   const killLines = Object.entries(run.killsByRule).sort((a, b) => b[1] - a[1]).map(([k, v]) => `- ${k}: ${v} coins`).join('\n') || '- none';
   const open = state.positions.map((p) => `- ${p.id} ${p.symbol}: mark $${p.markUsd.toFixed(2)} (cost $${p.sizeUsd.toFixed(2)}), stop $${p.stopPrice.toPrecision(4)}${p.trailing ? ' trailing' : ''}`).join('\n') || '- none';
   const closed = state.closed.map((x) => `- ${x.id} ${x.symbol}: ${x.pnlUsd >= 0 ? '+' : ''}$${x.pnlUsd.toFixed(2)} (${x.pnlPct}%, ${x.R}R), ${x.exitReason}`).join('\n') || '- none';
@@ -55,6 +56,7 @@ Top rule: ${config.topRule}.
 - scans: ${run.scans} · coin checks: ${run.checks} · unique coins: ${run.uniqueCoins.size}
 - killed (unique coins, by first rule hit):
 ${killLines}
+- every rule hit (a coin can fail several): ${allHits}
 - failed sell test: ${run.honeypotKills} · scored below ${config.analyst.passScore}: ${run.lowScore} · falling tape: ${run.fallingTape}
 - head of desk vetoes: ${run.vetoes} · approved: ${run.approved}
 

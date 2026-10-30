@@ -27,7 +27,7 @@ fs.mkdirSync(path.dirname(statePath), { recursive: true });
 const state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath, 'utf8')) : newState(config);
 const save = () => fs.writeFileSync(statePath, JSON.stringify(state, null, 1));
 
-const run = { scans: 0, checks: 0, uniqueCoins: new Set(), killsByRule: {}, killedCoins: new Set(), honeypotKills: 0, lowScore: 0, fallingTape: 0, vetoes: 0, approved: 0, unknownCounts: {}, alive: new Set() };
+const run = { scans: 0, checks: 0, uniqueCoins: new Set(), killsByRule: {}, allHitsByRule: {}, killedCoins: new Set(), honeypotKills: 0, lowScore: 0, fallingTape: 0, vetoes: 0, approved: 0, unknownCounts: {}, alive: new Set() };
 const pad = (s, n) => String(s).padEnd(n).slice(0, n);
 const sym = (c) => pad('$' + c.symbol, 11);
 const sp = (x) => (x >= 1 ? x.toFixed(4) : x.toPrecision(4));
@@ -45,9 +45,14 @@ async function scanOnce() {
     for (const u of f.unknowns) run.unknownCounts[u] = (run.unknownCounts[u] || 0) + 1;
     if (!f.alive) {
       const k = f.killedBy;
-      if (!run.killedCoins.has(c.mint)) { run.killedCoins.add(c.mint); const key = `${k.n} ${k.id}`; run.killsByRule[key] = (run.killsByRule[key] || 0) + 1; }
-      log.event('kill', { mint: c.mint, symbol: c.symbol, rule: k.id, ruleN: k.n, value: k.value, why: k.note, unknowns: f.unknowns, mcap: c.mcap, liq: c.liqUsd, ageMin: c.ageMin },
-        `✖ KILL   ${sym(c)} rule ${k.n} ${pad(k.id, 11)} ${k.note}`);
+      const hits = f.results.filter((r) => r.status === 'kill').map((r) => `${r.n} ${r.id}`);
+      if (!run.killedCoins.has(c.mint)) {
+        run.killedCoins.add(c.mint);
+        const key = `${k.n} ${k.id}`; run.killsByRule[key] = (run.killsByRule[key] || 0) + 1;
+        for (const h of hits) run.allHitsByRule[h] = (run.allHitsByRule[h] || 0) + 1; // every rule it fails, not just the first
+      }
+      log.event('kill', { mint: c.mint, symbol: c.symbol, rule: k.id, ruleN: k.n, value: k.value, why: k.note, hits, unknowns: f.unknowns, mcap: c.mcap, liq: c.liqUsd, ageMin: c.ageMin },
+        `✖ KILL   ${sym(c)} rule ${k.n} ${pad(k.id, 11)} ${k.note}${hits.length > 1 ? ` (+${hits.length - 1} more)` : ''}`);
       continue;
     }
     run.alive.add(c.mint);
