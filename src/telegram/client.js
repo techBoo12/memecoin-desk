@@ -18,8 +18,11 @@ export class TelegramError extends Error {
   }
 }
 
-export function createTelegramClient({ token = process.env.TELEGRAM_BOT_TOKEN, fetchImpl = globalThis.fetch, timeoutMs = 40_000 } = {}) {
+// apiBase: only a LOCAL fake Telegram (tests / wrangler dev) may replace api.telegram.org. the real token never goes anywhere else.
+const LOCAL_ONLY = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
+export function createTelegramClient({ token = process.env.TELEGRAM_BOT_TOKEN, fetchImpl = globalThis.fetch, timeoutMs = 40_000, apiBase } = {}) {
   const t = String(token ?? '').trim();
+  const base = apiBase && LOCAL_ONLY.test(apiBase) ? apiBase : API;
   if (!TOKEN_SHAPE.test(t)) throw new Error('TELEGRAM_BOT_TOKEN is missing or is not a bot token (value not shown)');
   const redact = (s) => String(s ?? '').split(t).join('[token]');
 
@@ -28,7 +31,7 @@ export function createTelegramClient({ token = process.env.TELEGRAM_BOT_TOKEN, f
     const timer = setTimeout(() => ctl.abort(), timeout);
     let res, body;
     try {
-      res = await fetchImpl(`${API}/bot${t}/${method}`, {
+      res = await fetchImpl(`${base}/bot${t}/${method}`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(params), signal: ctl.signal,
       });
@@ -52,5 +55,10 @@ export function createTelegramClient({ token = process.env.TELEGRAM_BOT_TOKEN, f
       call('getUpdates', { offset, timeout, allowed_updates: ['message'] }, { timeout: (timeout + 15) * 1000 }),
     sendMessage: (chatId, text, extra = {}) =>
       call('sendMessage', { chat_id: chatId, text: String(text).slice(0, 4000), disable_web_page_preview: true, ...extra }),
+    // day 4, the button menu: edit the panel in place + answer every tap
+    editMessageText: (chatId, messageId, text, extra = {}) =>
+      call('editMessageText', { chat_id: chatId, message_id: messageId, text: String(text).slice(0, 4000), disable_web_page_preview: true, ...extra }),
+    answerCallbackQuery: (id, text, showAlert = false) =>
+      call('answerCallbackQuery', { callback_query_id: id, ...(text ? { text: String(text).slice(0, 190), show_alert: Boolean(showAlert) } : {}) }, { timeout: 6000 }),
   };
 }
