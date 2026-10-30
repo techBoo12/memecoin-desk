@@ -2,7 +2,7 @@
 // SETTINGS (editable from Telegram)
 // Job: the ONLY config keys the owner can change from her phone, each with a
 //      safe range. config.json stays the defaults; changes from Telegram are
-//      saved as overrides (state/settings.json today, KV later) and laid on
+//      saved as overrides (state/settings.json locally, Durable Object storage on Cloudflare) and laid on
 //      top at boot and on every /set.
 // HARD STOP: mode is not on this list. Paper stays paper until a separate,
 //            human-signed step. Values outside the range are refused.
@@ -20,6 +20,10 @@ export const SETTINGS = {
   minvol:      { path: 'filter.minVolume1hUsd', min: 10_000, max: 1_000_000, int: true, unit: '$', label: 'kill rule 4: min 1h volume' },
   scanevery:   { path: 'loop.scanEverySec', min: 60, max: 1800, int: true, unit: 's', label: 'scan every (seconds)' },
   scanalerts:  { path: 'telegram.scanAlerts', bool: true, label: 'scan summary alerts on/off' },
+  maxtrades:   { path: 'quality.maxTradesPerDay', min: 1, max: 20, int: true, label: 'max new trades per day' },
+  minbuys:     { path: 'quality.minBuyShare1h', min: 0.5, max: 0.8, label: 'min share of 1h txns that are buys (0.55 = 55%)' },
+  minliqmcap:  { path: 'quality.minLiqToMcap', min: 0.02, max: 0.5, label: 'min liquidity / market cap (0.08 = 8%)' },
+  watchevery:  { path: 'loop.watchEverySec', min: 2, max: 30, int: true, unit: 's', label: 'check open trades every (seconds)' },
 };
 
 export const normKey = (k) => String(k || '').toLowerCase().replace(/[^a-z]/g, '');

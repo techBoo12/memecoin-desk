@@ -11,9 +11,12 @@ import { getJSON } from '../lib/http.js';
 
 const rcCache = new Map(); // mint -> { at, data }
 
-export async function rugcheckReport(mint) {
+// cache is short (default 100 s) so the next scan sees a fresh holder count:
+// the quality gate needs two real looks to prove holders are rising
+export async function rugcheckReport(mint, ttlMs = 100_000) {
   const hit = rcCache.get(mint);
-  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.data;
+  if (hit && Date.now() - hit.at < ttlMs) return hit.data;
+  if (rcCache.size > 300) for (const [k, v] of rcCache) if (Date.now() - v.at > ttlMs) rcCache.delete(k);
   const r = await getJSON(`https://api.rugcheck.xyz/v1/tokens/${mint}/report`, { minGapMs: 700, timeoutMs: 20000 });
   const data = r.ok ? r.data : null;
   rcCache.set(mint, { at: Date.now(), data });
@@ -100,7 +103,7 @@ export const KILL_RULES = [
 
 export async function filter(candidate, { config }) {
   const cfg = config.filter;
-  const rc = await rugcheckReport(candidate.mint);
+  const rc = await rugcheckReport(candidate.mint, (config.filter.rugcheckCacheSec ?? 100) * 1000);
   const results = KILL_RULES.map((r) => ({ id: r.id, n: r.n, name: r.name, ...r.check(candidate, rc, cfg) }));
   const killedBy = results.find((r) => r.status === 'kill')
     || results.find((r) => r.status === 'unknown' && cfg.unknownIsKill.includes(r.id));

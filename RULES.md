@@ -26,6 +26,25 @@ Sources: the "memecoin desk" article by @A_Pirate_I (the desk roles), Van Tharp 
 | trade with the tape: no buys into a falling 5m or 1h | Reminiscences | `src/desk/analyst.js` `tapeOk`; `head.js` veto |
 | don't chase: already +80% in 1h is dead | Reminiscences | `src/desk/filter.js` rule 8 |
 
+## day 3: quality over quantity
+
+techBoo's call after day 2: *"it should not ape just any coin. we only gonna be trading quality over quantity."* So every buy now has to clear more, and the desk takes fewer, better trades. All numbers live in `config.json` (`analyst`, `quality`, `filter`, `risk`) and the main ones are editable from Telegram.
+
+| change | was | now | why |
+|---|---|---|---|
+| min analyst score | 70 | **80** (`analyst.passScore`) | day 2's CTO scored 86 and still dumped; 70-79 coins were the weakest group. 65-79 now goes to the near-miss tracker instead of the book, so we learn if 80 is too strict |
+| unknowns | 3 rules could be unknown and still pass | **zero unknowns**: all 8 rules must be checked and pass (`filter.unknownIsKill` = all 8, `quality.requireNoUnknowns`) | "unknown" means we couldn't see something. quality trades are the ones where we can see everything |
+| buy pressure | scored, not required | **55%+ of 1h txns are buys AND 52%+ of 5m txns** (`quality.minBuyShare1h`, `minBuyShare5m`) | a coin that's mostly being sold is people exiting. both windows, so an old 1h pump that's now being dumped doesn't pass |
+| live activity | not checked | **15+ txns in the last 5 min** (`quality.minTxns5m`) | a quiet coin can't give us a clean exit, and its numbers are stale |
+| trend | no buy if 5m or 1h is falling | **must be UP on 5m AND 1h** (`quality.requireUp5m`, `requireUp1h`) | trade with the tape (Reminiscences): flat isn't good enough anymore |
+| holders | scored | **must be rising between two of our own looks, 90s+ apart** (`quality.requireHoldersRising`, `minHolderLookGapSec`) | new holders = real demand. this also forces a second look before any buy, so the desk never apes on first sight |
+| liquidity / mcap | scored | **liquidity must be 8%+ of market cap** (`quality.minLiqToMcap`) | thin liquidity under a big mcap = we can't get out at the price we see. CTO's gap through the stop was a thin-pool problem |
+| already pumped | +80% in 1h = dead | **+50% in 1h = dead** (rule 8) and **+250% in 6h = no trade** (`quality.maxPump6hPct`) | late entries are exit liquidity for the early buyers |
+| trades per day | unlimited | **max 4 new trades a day** (`quality.maxTradesPerDay`) | quality over quantity, written as a hard cap. the head of desk vetoes the 5th |
+| open at once | 3 | **2** (`risk.maxOpenPositions`) | fewer positions = each one watched harder, and less exposure in a market-wide dump |
+
+Every quality check is recorded with its value and the line it had to clear (`src/desk/quality.js`), so a buy shows exactly why it passed and a skip shows exactly why it was skipped.
+
 ## honest limits (free data)
 
 - **rule 6, past rugs:** only RugCheck's own creator-history flag. A full dev wallet history needs paid/RPC data.

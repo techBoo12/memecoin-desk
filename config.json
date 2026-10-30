@@ -1,49 +1,119 @@
 {
-  "_note": "ONE config for the whole desk. Every number here will be editable from Telegram later. Money is fake: PAPER mode only.",
+  "_note": "ONE config for the whole desk. Safe keys are editable from Telegram (/set). Money is fake: PAPER mode only. Why each number is what it is: RULES.md.",
   "mode": "paper",
   "topRule": "protect the balance first, profit second",
-
   "account": {
     "startingBalanceUsd": 100,
     "weeklyGoalPct": 15,
     "weeklyMaxDrawdownPct": 12,
     "dailyLossLimitPct": 5
   },
-
   "scout": {
-    "dexes": ["pumpswap", "raydium"],
+    "dexes": [
+      "pumpswap",
+      "raydium"
+    ],
     "minAgeMin": 30,
     "maxAgeMin": 4320,
     "minMcapUsd": 300000,
     "maxMcapUsd": 20000000,
     "geckoTerminal": true,
-    "searchQueries": ["pumpswap", "raydium", "pump", "sol", "meme", "cat", "dog", "ai", "trump", "pepe", "moon", "inu", "frog", "elon", "baby", "wif", "bonk", "agent", "chill", "based", "coin", "wojak", "gm", "lol", "goat", "shib", "penguin", "monkey", "bull", "rocket", "king", "doge", "chad", "mog", "giga", "fart", "sigma", "grok", "robot", "nigeria", "africa", "kitty", "bear", "money", "pump it"],
-    "maxCandidatesPerScan": 40
+    "searchQueries": [
+      "pumpswap",
+      "raydium",
+      "pump",
+      "sol",
+      "meme",
+      "cat",
+      "dog",
+      "ai",
+      "trump",
+      "pepe",
+      "moon",
+      "inu",
+      "frog",
+      "elon",
+      "baby",
+      "wif",
+      "bonk",
+      "agent",
+      "chill",
+      "based",
+      "coin",
+      "wojak",
+      "gm",
+      "lol",
+      "goat",
+      "shib",
+      "penguin",
+      "monkey",
+      "bull",
+      "rocket",
+      "king",
+      "doge",
+      "chad",
+      "mog",
+      "giga",
+      "fart",
+      "sigma",
+      "grok",
+      "robot",
+      "nigeria",
+      "africa",
+      "kitty",
+      "bear",
+      "money",
+      "pump it"
+    ],
+    "maxCandidatesPerScan": 30,
+    "searchQueriesPerScan": 12,
+    "maxTokenBatches": 6
   },
-
   "filter": {
     "minLiquidityUsd": 40000,
     "minVolume1hUsd": 50000,
     "maxTop10Pct": 25,
     "maxDevPct": 3,
     "maxBundledPct": 10,
-    "maxPump1hPct": 80,
+    "maxPump1hPct": 50,
     "minLpLockedPct": 90,
-    "unknownIsKill": ["mint_freeze", "lp_locked", "top10"]
+    "unknownIsKill": [
+      "mint_freeze",
+      "lp_locked",
+      "liquidity",
+      "volume_1h",
+      "top10",
+      "dev",
+      "bundled",
+      "pumped_1h"
+    ],
+    "rugcheckCacheSec": 100
   },
-
   "honeypot": {
     "testSizeUsd": 8,
     "maxRoundTripLossPct": 8,
     "maxPriceImpactPct": 3,
     "slippageBps": 300
   },
-
   "analyst": {
-    "passScore": 70,
+    "passScore": 80,
+    "nearMissScore": 65,
     "requireUptrend": true
   },
-
+  "quality": {
+    "_note": "quality over quantity (techBoo, Oct 30): a coin must pass ALL of these after the 8 kill rules, or no trade. Each failure is logged with the number that broke it.",
+    "requireNoUnknowns": true,
+    "minBuyShare1h": 0.55,
+    "minBuyShare5m": 0.52,
+    "minTxns5m": 15,
+    "requireUp5m": true,
+    "requireUp1h": true,
+    "requireHoldersRising": true,
+    "minHolderLookGapSec": 90,
+    "minLiqToMcap": 0.08,
+    "maxPump6hPct": 250,
+    "maxTradesPerDay": 4
+  },
   "risk": {
     "riskPerTradePct": 0.5,
     "maxPositionPct": 8,
@@ -51,25 +121,36 @@
     "trailActivatePct": 12,
     "trailDistancePct": 8,
     "takeProfitLadder": [
-      { "atMultiple": 2, "sellPct": 30 },
-      { "atMultiple": 5, "sellPct": 30 }
+      {
+        "atMultiple": 2,
+        "sellPct": 30
+      },
+      {
+        "atMultiple": 5,
+        "sellPct": 30
+      }
     ],
-    "maxOpenPositions": 3,
+    "maxOpenPositions": 2,
     "lossStreakForCooldown": 2,
     "cooldownMin": 30,
     "noReentryAfterStopMin": 240,
     "paperFeePct": 0.5
   },
-
+  "exits": {
+    "_note": "fast exits (day 3): open trades are priced every loop.watchEverySec from one batched call; fills use a real Jupiter sell quote. Emergency exit if liquidity is pulled.",
+    "liqCheckEverySec": 10,
+    "liqDropExitPct": 40,
+    "minLiqExitUsd": 15000
+  },
   "telegram": {
     "_note": "token is NEVER here: it comes from the TELEGRAM_BOT_TOKEN env var. The owner pairs once with /start <code>. Subscribers = chat ids that get read-only alerts.",
     "scanAlerts": true,
     "alertSubscribers": []
   },
-
   "loop": {
     "scanEverySec": 120,
-    "watchEverySec": 15,
-    "runMinutes": 25
+    "watchEverySec": 3,
+    "runMinutes": 25,
+    "testHours": 24
   }
 }

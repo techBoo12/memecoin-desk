@@ -17,8 +17,13 @@ export function review(proposal, status, state, config) {
   if (state.positions.some((p) => p.mint === c.mint)) return veto('already holding it');
   if ((state.noReentry[c.mint] || 0) > Date.now()) return veto('stopped out on this coin recently, no re-entry');
   if (state.positions.length >= config.risk.maxOpenPositions) return veto(`max ${config.risk.maxOpenPositions} open positions`);
+  const cap = config.quality?.maxTradesPerDay;
+  const day = new Date().toISOString().slice(0, 10);
+  const today = [...state.positions, ...state.closed].filter((t) => String(t.entryAt).slice(0, 10) === day).length;
+  if (cap && today >= cap) return veto(`daily trade cap: ${today}/${cap} trades today (quality over quantity)`);
   if (!a.passes) return veto(`score ${a.score} < ${config.analyst.passScore}`);
   if (!a.tapeOk) return veto(`falling tape (5m ${a.tape.m5}%, 1h ${a.tape.h1}%), wait for confirmation`);
+  if (proposal.q && !proposal.q.ok) return veto(`quality gate: ${proposal.q.failed.map((x) => x.note).join('; ')}`);
   if (size.sizeUsd < 1) return veto('size under $1, not worth the fees');
   return { approved: true, reason: `score ${a.score}, risk ${size.riskUsd.toFixed(2)} (1R), size $${size.sizeUsd.toFixed(2)}` };
 }

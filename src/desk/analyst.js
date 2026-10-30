@@ -1,18 +1,19 @@
 // ============================================================================
 // ANALYST
-// Job: score every survivor 0-100. Only 70+ moves on. Also reads the tape:
+// Job: score every survivor 0-100. Only 80+ moves on (was 70 until day 3). Also reads the tape:
 //      no buying into a falling 5m/1h chart (wait for confirmation).
 // Data: DexScreener pair stats + rugcheck holder count (+ holder growth seen
-//       across scans in this session).
+//       across scans; the history lives in the desk state so it survives
+//       restarts and works on Cloudflare too).
 // HARD STOP: the analyst never sizes, never trades, never overrides the
 //            filter. A high score on a killed coin does not exist.
 // NOT SCORED (honest): true unique buyers (DexScreener gives txn counts, not
 //            wallets) and smart-wallet tracking (needs wallet data, later).
 // ============================================================================
 const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
-const holderHistory = new Map(); // mint -> [{at, holders}]
+const localHistory = {}; // fallback when no desk state is passed in
 
-export function analyze(c, rc, { config }) {
+export function analyze(c, rc, { config, holderHistory = localHistory, now = Date.now() }) {
   const parts = {};
   // 1. momentum (25): healthy climb, not a vertical candle
   parts.momentum = c.change.h1 <= 0 ? 0 : clamp(c.change.h1 / 40) * 15 + (c.change.m5 > 0 ? clamp(c.change.m5 / 5) * 10 : 0);
@@ -31,14 +32,17 @@ export function analyze(c, rc, { config }) {
   // 6. holders (10): base size + growth between our own scans
   const holders = Number(rc?.totalHolders) || 0;
   parts.holders = clamp(Math.log(Math.max(holders, 1) / 500) / Math.log(10)) * 6;
-  const hist = holderHistory.get(c.mint) || [];
-  if (holders) hist.push({ at: Date.now(), holders });
-  holderHistory.set(c.mint, hist.slice(-20));
+  const hist = holderHistory[c.mint] || [];
+  const last = hist[hist.length - 1];
+  if (holders && (!last || last.holders !== holders || now - last.at > 60_000)) hist.push({ at: now, holders });
+  holderHistory[c.mint] = hist.slice(-12);
+  // growth between the oldest look in the last hour and now (needs 2 looks, gap >= minHolderLookGapSec)
   let growthPerHour = null;
-  if (hist.length >= 2) {
-    const a = hist[0], z = hist[hist.length - 1];
-    const hrs = (z.at - a.at) / 3.6e6;
-    if (hrs > 0.03) growthPerHour = ((z.holders - a.holders) / Math.max(a.holders, 1)) * 100 / hrs;
+  const gapMs = (config.quality?.minHolderLookGapSec ?? 108) * 1000;
+  const recent = hist.filter((h) => now - h.at < 3.6e6);
+  if (recent.length >= 2) {
+    const a = recent[0], z = recent[recent.length - 1];
+    if (z.at - a.at >= gapMs) growthPerHour = ((z.holders - a.holders) / Math.max(a.holders, 1)) * 100 / ((z.at - a.at) / 3.6e6);
   }
   parts.holders += growthPerHour == null ? 2 : clamp(growthPerHour / 10) * 4;
 
