@@ -58,6 +58,24 @@ Day 2's CTO had a -6% stop and closed at **-13.9% (-2.31R)**: price was checked 
 
 Every sell now logs *why* (stop / trailing stop / take profit / emergency), the trigger price and its source, the fill and its source, the slippage vs the stop, and the peak gain before the exit.
 
+## day 3: the near-miss tracker
+
+From a post techBoo liked: *"log every trade your bot almost took and why it passed. half the bugs and most of the edge hide in the skipped signals."*
+
+`src/desk/nearmiss.js` writes down every coin the desk **almost** bought, with the exact reason it said no:
+
+- failed exactly **one** of the 8 kill rules (and for liquidity/volume, was at least half way to the line), or
+- passed all 8 rules but **failed the sell test**, or
+- passed everything but **scored 65-79** (`analyst.nearMissScore`), or
+- scored 80+ but the **quality gate** or the **head of desk** said no (cap, cooldown, no re-entry...).
+
+Then it re-checks the price at **+15m, +1h, +4h and +24h**. A near miss is "pumped" at +30% or more, "dumped" at -30% or worse (or liquidity gone), else "flat". The 24h report groups them by reason:
+
+- skipped coins that keep **pumping** for one reason = that rule may be too strict (missed edge)
+- skipped coins that keep **dumping** = that rule is saving us
+
+One record per coin per 6 h (later looks just count), so a coin seen every scan isn't counted 30 times. `/nearmiss` in Telegram shows the latest ones and what they did.
+
 ## honest limits (free data)
 
 - **rule 6, past rugs:** only RugCheck's own creator-history flag. A full dev wallet history needs paid/RPC data.
