@@ -20,6 +20,8 @@ const sp = (x) => (x >= 1 ? x.toFixed(4) : x.toPrecision(4));
 
 export const HELP = `🤖 memecoin desk · paper mode
 
+/menu  the button panel (buy, sell, positions, settings)
+paste a coin address  safety check + paper buy buttons
 /status  balance, open trades, today p/l
 /pause  stop new trades (stops still run)
 /resume  back to work

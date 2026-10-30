@@ -15,7 +15,10 @@ import { DurableObject } from 'cloudflare:workers';
 import CONFIG from '../../config.json'; // the same config.json as the Node desk (bundled by wrangler)
 import { createEngine } from '../desk/engine.js';
 import { equity, riskStatus } from '../desk/risk.js';
-import { applyOverrides, changeSetting } from '../desk/settings.js';
+import { applyOverrides, changeSetting, stepSetting } from '../desk/settings.js';
+import { checkToken, manualBuy, manualSell } from '../desk/manual.js';
+import { markPrice } from '../desk/executor.js';
+import { createMenu } from '../telegram/menu.js';
 import { createTelegramClient } from '../telegram/client.js';
 import { classify, PRIVATE_TEXT, SUBSCRIBER_TEXT } from '../telegram/lock.js';
 import { runCommand } from '../telegram/commands.js';
@@ -39,7 +42,8 @@ export class Desk extends DurableObject {
 
   async load() {
     if (this.S) return;
-    const got = await this.ctx.storage.get([...PARTS, 'settings', 'outbox', 'timers']);
+    const got = await this.ctx.storage.get([...PARTS, 'settings', 'outbox', 'timers', 'ui']);
+    this.ui = got.get('ui') || {}; // the button menu's own small state: panel message id, pending checks
     this.S = {};
     for (const k of PARTS) if (got.get(k)) this.S[k] = got.get(k);
     this.S.timers = got.get('timers') || undefined;
@@ -48,7 +52,7 @@ export class Desk extends DurableObject {
     this.config = structuredClone(CONFIG);
     applyOverrides(this.config, this.overrides);
     this.engine = createEngine({ config: this.config, S: this.S, log, notify: (k, t, o) => this.notify(k, t, o) });
-    this.client = this.env.TELEGRAM_BOT_TOKEN ? createTelegramClient({ token: this.env.TELEGRAM_BOT_TOKEN, timeoutMs: 8000 }) : null;
+    this.client = this.env.TELEGRAM_BOT_TOKEN ? createTelegramClient({ token: this.env.TELEGRAM_BOT_TOKEN, timeoutMs: 8000, apiBase: this.env.TG_API_BASE }) : null;
     this.lock = { ownerChatId: this.env.OWNER_CHAT_ID ? Number(this.env.OWNER_CHAT_ID) : null };
     this.lastTimersSave = 0;
   }
@@ -59,7 +63,7 @@ export class Desk extends DurableObject {
       if (last && Date.now() - last < dedupeMs) return false;
       this.dedupe.set(dedupeKey, Date.now());
     }
-    if (kind === 'scan' && this.config.telegram?.scanAlerts === false) return false;
+    if (!alert.alertAllowed(kind, this.config)) return false;
     this.outbox.push({ kind, text, at: Date.now() });
     if (this.outbox.length > 60) this.outbox.splice(0, this.outbox.length - 60); // never let a backlog grow
     this.outboxDirty = true;
@@ -158,7 +162,81 @@ export class Desk extends DurableObject {
     try { await this.client.sendMessage(chatId, text); } catch (e) { console.log('telegram reply failed: ' + this.client.redact(e.message)); }
   }
 
+  // ---------- day 4: the button menu
+  getMenu() {
+    if (this.menu) return this.menu;
+    const owner = this.lock.ownerChatId;
+    const markup = (kb) => (kb && kb.length ? { reply_markup: { inline_keyboard: kb } } : {});
+    const io = {
+      send: async (text, kb) => {
+        if (!this.client) return null;
+        try { return (await this.client.sendMessage(owner, text, { parse_mode: 'HTML', ...markup(kb) }))?.message_id ?? null; }
+        catch (e) { console.log('telegram send failed: ' + this.client.redact(e.message)); return null; }
+      },
+      edit: async (id, text, kb) => {
+        if (!this.client) return false;
+        try { await this.client.editMessageText(owner, id, text, { parse_mode: 'HTML', ...markup(kb) }); return true; }
+        catch (e) {
+          if (/not modified/i.test(e.description || e.message)) return true; // same text: nothing to do
+          console.log('telegram edit failed: ' + this.client.redact(e.message)); return false; // old/deleted message: menu sends a fresh one
+        }
+      },
+      answer: async (id, text, alert) => {
+        if (!this.client) return;
+        try { await this.client.answerCallbackQuery(id, text, alert); } catch (e) { console.log('telegram answer failed: ' + this.client.redact(e.message)); }
+      },
+    };
+    const desk = {
+      snapshot: () => this.engine.snapshot(),
+      pause: async () => { this.engine.pause(); await this.save(); },
+      resume: async () => { this.engine.resume(); await this.save(); },
+      step: async (key, dir) => {
+        const r = stepSetting(this.config, this.overrides, key, dir);
+        if (r.ok) await this.ctx.storage.put('settings', this.overrides);
+        return r;
+      },
+      check: (mint) => checkToken(mint, { config: this.config, S: this.S }),
+      buy: async (c, usd, force) => {
+        const r = await manualBuy(this.S, c, usd, this.config, { force });
+        if (r.ok) {
+          this.S._dirty.add('desk');
+          this.engine.event?.('buy', `▲ PAPER BUY ${r.pos.id} $${r.pos.symbol} $${r.pos.sizeUsd.toFixed(2)} MANUAL (you, from the button menu)${force ? ' · bought anyway' : ''}`);
+          this.S.timers.nextWatch = Date.now();
+          const a = await this.ctx.storage.getAlarm();
+          if (a == null || a > Date.now() + 2000) await this.ctx.storage.setAlarm(Date.now() + 1000); // start the 3s exit watch now
+        }
+        return r;
+      },
+      sell: async (id, pct) => {
+        const r = await manualSell(this.S, id, pct, this.config);
+        if (r.ok) { this.S._dirty.add('desk'); this.engine.event?.('sell', `▼ PAPER SELL ${id} ${pct}% MANUAL (you)${r.trade ? ` · closed ${r.trade.pnlUsd >= 0 ? '+' : '-'}$${Math.abs(r.trade.pnlUsd).toFixed(2)}` : ''}`); }
+        return r;
+      },
+      refresh: async (id) => {
+        const pos = this.S.desk.positions.find((p) => p.id === id);
+        if (!pos) return;
+        const m = await markPrice(pos, pos.lastPrice, this.config);
+        const p2 = this.S.desk.positions.find((p) => p.id === id);
+        if (m && p2) { p2.lastPrice = m.price; p2.markUsd = p2.tokens * m.price; this.S._dirty.add('desk'); }
+      },
+      save: async () => {
+        await this.save();
+        const u = JSON.stringify(this.ui);
+        if (u !== this.uiSaved) { this.uiSaved = u; await this.ctx.storage.put('ui', this.ui); }
+      },
+    };
+    this.menu = createMenu({ io, desk, ui: this.ui, ownerId: owner });
+    return this.menu;
+  }
+
   async onTelegram(update) {
+    const cq = update?.callback_query;
+    if (cq) {
+      if (this.lock.ownerChatId && cq.from?.id === this.lock.ownerChatId) { await this.getMenu().onCallback(cq); return; }
+      // not the owner: one short "private" toast, nothing else runs
+      if (this.client) try { await this.client.answerCallbackQuery(cq.id, 'this desk is private 🔒', true); } catch { /* ignore */ }
+      return;
+    }
     const msg = update?.message;
     if (!msg?.chat || typeof msg.text !== 'string') return;
     if (Date.now() - msg.date * 1000 > 10 * 60_000) return; // stale retry from telegram: ignore
@@ -174,8 +252,10 @@ export class Desk extends DurableObject {
           return r;
         },
       };
-      const text = msg.text.startsWith('/') ? await runCommand(msg.text, desk) : 'i only speak commands for now 🙂 /help';
-      await this.reply(msg.chat.id, text);
+      const cmd = msg.text.trim().split(/\s+/)[0].toLowerCase().replace(/@\w+$/, '');
+      if (cmd === '/start' || cmd === '/menu') { await this.getMenu().sendHome(); return; }
+      if (!msg.text.startsWith('/')) { await this.getMenu().onText(msg.text); return; }
+      await this.reply(msg.chat.id, await runCommand(msg.text, desk));
       return;
     }
     const last = this.strangers.get(msg.chat.id) || 0;
