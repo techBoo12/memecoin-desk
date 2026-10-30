@@ -1,0 +1,15 @@
+📋 head of desk report · 2026-10-30
+balance $99.19 (started $100.00) · today -0.81%
+
+this session: 10 scans · 17 coins · 12 killed
+killed by: low volume 9 (rule 4), low liq 3 (rule 3)
+passed all 8 rules: 5 · paper buys: 1 · no-trade calls: 24
+
+trades closed: 2 (0 wins, 2 losses)
+realized -$1.69 · expectancy -1.76R per trade
+• $HEXN -$0.58 (-7.25%, -1.21R) stop -6%
+• $CTO -$1.11 (-13.88%, -2.31R) stop -6%
+open: $HYPERCHAN
+
+2 trades is too few to judge. thinking in probabilities
+rule #1: protect the balance first, profit second

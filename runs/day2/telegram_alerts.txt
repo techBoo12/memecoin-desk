@@ -1,0 +1,122 @@
+every telegram alert from the day 2 live run, in the exact message format (times UTC).
+before 11:16:54 the owner had not paired yet, so those were logged, not sent.
+
+[11:05:18 UTC · online · queued: owner not paired yet]
+🟢 desk online · paper
+balance $100.19 · 1 open trade
+scanning every 2 min
+
+[11:05:49 UTC · pick · queued: owner not paired yet]
+⭐ pick: $CTO scored 79/100
+mcap $304k · liq $50k · 100m old
+🙅 head of desk: chart is falling (5m -17.6%, 1h 69.94%), waiting for it to turn
+
+[11:05:51 UTC · pick · queued: owner not paired yet]
+⭐ pick: $HEXN scored 73/100
+mcap $432k · liq $62k · 18h old
+🙅 head of desk: no revenge trade on $HEXN. it stopped us out earlier
+
+[11:06:03 UTC · scan · queued: owner not paired yet]
+🔎 scan #1 · 11 coins checked
+✖ 7 killed (low volume 6, low liq 1)
+✔ 4 passed all 8 rules · 2 scored 70+
+balance $100.19
+
+[11:07:56 UTC · scan · queued: owner not paired yet]
+🔎 scan #2 · 12 coins checked
+✖ 9 killed (low volume 7, low liq 2)
+✔ 3 passed all 8 rules · 1 scored 70+
+balance $99.74
+
+[11:09:55 UTC · pick · queued: owner not paired yet]
+⭐ pick: $CTO scored 86/100
+mcap $309k · liq $50k · 104m old
+✅ head of desk: approved
+
+[11:09:55 UTC · buy · queued: owner not paired yet]
+🟢 paper buy $CTO
+$8.00 @ $0.0003177
+stop $0.0002987 (-6%) · 1R = $0.48
+
+[11:10:07 UTC · scan · queued: owner not paired yet]
+🔎 scan #3 · 9 coins checked
+✖ 4 killed (low volume 4)
+✔ 5 passed all 8 rules · 2 scored 70+
+balance $100.01
+
+[11:12:05 UTC · scan · queued: owner not paired yet]
+🔎 scan #4 · 11 coins checked
+✖ 7 killed (low volume 6, low liq 1)
+✔ 4 passed all 8 rules · 1 scored 70+
+balance $99.41
+
+[11:12:12 UTC · stop_out · queued: owner not paired yet]
+🛑 stopped out: $CTO
+entry $0.0003177 → exit $0.0002764
+p/l -$1.11 (-13.88%, -2.31R)
+why: stop -6%
+
+[11:12:12 UTC · cooldown · queued: owner not paired yet]
+⏸ cooldown 30 min: 2 losses in a row. no revenge trades
+
+[11:14:11 UTC · pick · queued: owner not paired yet]
+⭐ pick: $HEXN scored 71/100
+mcap $418k · liq $61k · 18h old
+🙅 head of desk: no revenge trades: 2 losses in a row, cooling off
+
+[11:14:13 UTC · scan · queued: owner not paired yet]
+🔎 scan #5 · 12 coins checked
+✖ 9 killed (low volume 7, low liq 2)
+✔ 3 passed all 8 rules · 1 scored 70+
+balance $98.87
+
+[11:16:30 UTC · scan · queued: owner not paired yet]
+🔎 scan #6 · 8 coins checked
+✖ 4 killed (low volume 4)
+✔ 4 passed all 8 rules · 1 scored 70+
+balance $99.04
+
+[11:18:33 UTC · scan · sent to owner]
+🔎 scan #7 · 10 coins checked
+✖ 7 killed (low volume 6, low liq 1)
+✔ 3 passed all 8 rules · 1 scored 70+
+balance $99.12
+
+[11:20:41 UTC · scan · sent to owner]
+🔎 scan #8 · 12 coins checked
+✖ 9 killed (low volume 7, low liq 2)
+✔ 3 passed all 8 rules · 1 scored 70+
+balance $98.69
+
+[11:20:41 UTC · trail · sent to owner]
+📈 $HYPERCHAN +12.9%: trailing stop ON. stop moved up, never down
+
+[11:22:50 UTC · scan · sent to owner]
+🔎 scan #9 · 8 coins checked
+✖ 4 killed (low volume 4)
+✔ 4 passed all 8 rules · 1 scored 70+
+balance $99.15
+
+[11:24:52 UTC · scan · sent to owner]
+🔎 scan #10 · 10 coins checked
+✖ 7 killed (low volume 6, low liq 1)
+✔ 3 passed all 8 rules · 1 scored 70+
+balance $99.07
+
+[11:25:24 UTC · report · sent to owner]
+📋 head of desk report · 2026-10-30
+balance $99.19 (started $100.00) · today -0.81%
+
+this session: 10 scans · 17 coins · 12 killed
+killed by: low volume 9 (rule 4), low liq 3 (rule 3)
+passed all 8 rules: 5 · paper buys: 1 · no-trade calls: 24
+
+trades closed: 2 (0 wins, 2 losses)
+realized -$1.69 · expectancy -1.76R per trade
+• $HEXN -$0.58 (-7.25%, -1.21R) stop -6%
+• $CTO -$1.11 (-13.88%, -2.31R) stop -6%
+open: $HYPERCHAN
+
+2 trades is too few to judge. thinking in probabilities
+rule #1: protect the balance first, profit second
+

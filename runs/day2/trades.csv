@@ -1,0 +1,3 @@
+time,trade_id,side,symbol,mint,price_usd,usd,qty,reason,pnl_usd,R
+"2026-10-30T11:09:55.654Z","T001","BUY","CTO","9hhLCxn41KZcmK1vAf7u5M6vKLHRcsVn1VmVgUrhpump","0.0003177223958972107","8","25053.31730714763","score 86, risk 0.48 (1R), size $8.00","",""
+"2026-10-30T11:12:12.758Z","T001","SELL","CTO","9hhLCxn41KZcmK1vAf7u5M6vKLHRcsVn1VmVgUrhpump","0.0002763770017450648","6.889539917511618","25053.31730714763","stop -6%","-1.1105","-2.31"

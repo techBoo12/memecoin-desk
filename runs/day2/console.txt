@@ -1,0 +1,214 @@
+11:05:18  telegram: @techBoo_bot online · waiting for the owner to pair
+11:05:18  memecoin desk · PAPER MODE · $100.19 virtual · run 20 min · rule #1: protect the balance first, profit second
+11:05:46  SCAN #1  585 tokens seen · 11 in window (30m-72h, $300k-$20M) · equity $100.19
+11:05:46  ✔ ALIVE  $CTO        8/8 rules pass · mcap $304.0k · liq $50.4k · age 2h
+11:05:49  ⇄ SELL TEST $CTO        ok · $8 round trip 0.23% · impact 2.14% · Meteora DLMM
+11:05:49  ★ SCORE  $CTO         79/100  mom 15 buys 12 act 15 turn 15 liq 15 hold 8
+11:05:49  ○ NO TRADE $CTO        head of desk: falling tape (5m -17.6%, 1h 69.94%), wait for confirmation
+11:05:49  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.17M · liq $128.3k · age 8h
+11:05:49  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $432.4k · liq $62.1k · age 18h
+11:05:51  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.13% · impact 1.69% · Pump.fun Amm
+11:05:51  ★ SCORE  $HEXN        73/100  mom 0 buys 20 act 15 turn 15 liq 15 hold 8
+11:05:51  ○ NO TRADE $HEXN       head of desk: stopped out on this coin recently, no re-entry
+11:05:51  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $326.8k · liq $49.8k · age 9h
+11:05:58  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.24% · impact 1.57% · Pump.fun Amm
+11:05:58  ★ SCORE  $Foxii       53/100  mom 0 buys 4 act 13 turn 15 liq 15 hold 6
+11:05:58  ○ NO TRADE $Foxii      head of desk: score 53 < 70
+11:05:58  ✖ KILL   $HI         rule 4 volume_1h   1h vol $32.4k < $50.0k (+1 more)
+11:05:59  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $15.4k < $50.0k (+1 more)
+11:06:00  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $12.3k < $50.0k (+1 more)
+11:06:01  ✖ KILL   $USOE       rule 4 volume_1h   1h vol $6.2k < $50.0k
+11:06:01  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $5.1k < $50.0k
+11:06:03  ✖ KILL   $HALVE      rule 4 volume_1h   1h vol $1.2k < $50.0k (+2 more)
+11:06:03  ✖ KILL   $FOREVER    rule 3 liquidity   liq $0.00 < $40.0k (+3 more)
+11:06:03  ● HOLD   T002 $HYPERCHAN +9.1% · mark $8.63 · stop $0.001788
+11:07:04  ● HOLD   T002 $HYPERCHAN +4.6% · mark $8.27 · stop $0.001788
+11:07:46  SCAN #2  591 tokens seen · 12 in window (30m-72h, $300k-$20M) · equity $99.74
+11:07:46  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.10M · liq $126.2k · age 8h
+11:07:46  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $412.5k · liq $60.5k · age 18h
+11:07:47  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.13% · impact 1.4% · Pump.fun Amm
+11:07:47  ★ SCORE  $HEXN        71/100  mom 0 buys 20 act 15 turn 15 liq 15 hold 6
+11:07:47  ○ NO TRADE $HEXN       head of desk: stopped out on this coin recently, no re-entry
+11:07:47  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $323.3k · liq $49.5k · age 9h
+11:07:49  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.24% · impact 1.23% · Pump.fun Amm
+11:07:49  ★ SCORE  $Foxii       51/100  mom 0 buys 4 act 13 turn 15 liq 15 hold 4
+11:07:49  ○ NO TRADE $Foxii      head of desk: score 51 < 70
+11:07:49  ✖ KILL   $HI         rule 4 volume_1h   1h vol $37.3k < $50.0k (+1 more)
+11:07:49  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $14.4k < $50.0k (+1 more)
+11:07:49  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $12.4k < $50.0k (+1 more)
+11:07:52  ✖ KILL   $UDTF       rule 4 volume_1h   1h vol $5.9k < $50.0k
+11:07:54  ✖ KILL   $USDF       rule 4 volume_1h   1h vol $5.9k < $50.0k
+11:07:54  ✖ KILL   $USDA       rule 4 volume_1h   1h vol $5.7k < $50.0k
+11:07:54  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $5.0k < $50.0k
+11:07:55  ✖ KILL   $JAPRO      rule 3 liquidity   liq $0.08 < $40.0k (+4 more)
+11:07:56  ✖ KILL   $PREDICT    rule 3 liquidity   liq $0.00 < $40.0k (+4 more)
+11:08:11  ● HOLD   T002 $HYPERCHAN +5.6% · mark $8.35 · stop $0.001788
+11:09:12  ● HOLD   T002 $HYPERCHAN +8.5% · mark $8.58 · stop $0.001788
+11:09:54  SCAN #3  590 tokens seen · 9 in window (30m-72h, $300k-$20M) · equity $100.05
+11:09:54  ✔ ALIVE  $CTO        8/8 rules pass · mcap $308.9k · liq $50.3k · age 2h
+11:09:55  ⇄ SELL TEST $CTO        ok · $8 round trip 3.17% · impact 2.55% · Whirlpool > Pump.fun Amm
+11:09:55  ★ SCORE  $CTO         86/100  mom 25 buys 10 act 15 turn 15 liq 15 hold 6
+11:09:55  ▲ PAPER BUY T001 $CTO        $8.00 @ $0.0003177 · stop $0.0002987 (-6%) · 1R = $0.48
+11:09:55  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.08M · liq $125.6k · age 8h
+11:09:55  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $431.3k · liq $62.0k · age 18h
+11:09:57  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.13% · impact 1.64% · Pump.fun Amm
+11:09:57  ★ SCORE  $HEXN        71/100  mom 0 buys 20 act 15 turn 15 liq 15 hold 6
+11:09:57  ○ NO TRADE $HEXN       head of desk: stopped out on this coin recently, no re-entry
+11:09:57  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $314.3k · liq $48.7k · age 9h
+11:10:05  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.24% · impact 1.5% · Pump.fun Amm
+11:10:05  ★ SCORE  $Foxii       50/100  mom 0 buys 3 act 13 turn 15 liq 15 hold 4
+11:10:05  ○ NO TRADE $Foxii      head of desk: score 50 < 70
+11:10:05  ✔ ALIVE  $JOB        8/8 rules pass · mcap $2.92M · liq $150.3k · age 64h
+11:10:07  ⇄ SELL TEST $JOB        ok · $8 round trip 1.58% · impact 1.24% · Whirlpool
+11:10:07  ★ SCORE  $JOB         34/100  mom 7 buys 0 act 10 turn 0 liq 11 hold 7
+11:10:07  ○ NO TRADE $JOB        head of desk: score 34 < 70
+11:10:07  ✖ KILL   $HI         rule 4 volume_1h   1h vol $40.1k < $50.0k (+1 more)
+11:10:07  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $12.9k < $50.0k (+1 more)
+11:10:07  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $11.5k < $50.0k (+1 more)
+11:10:07  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $5.0k < $50.0k
+11:10:30  ● HOLD   T002 $HYPERCHAN +1.4% · mark $8.02 · stop $0.001788
+11:10:31  ● HOLD   T001 $CTO       -3.9% · mark $7.65 · stop $0.0002987
+11:12:01  SCAN #4  585 tokens seen · 11 in window (30m-72h, $300k-$20M) · equity $99.41
+11:12:01  ✔ ALIVE  $CTO        8/8 rules pass · mcap $305.8k · liq $50.1k · age 2h
+11:12:01  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.04M · liq $124.2k · age 8h
+11:12:01  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $422.2k · liq $61.3k · age 18h
+11:12:02  ⇄ SELL TEST $HEXN       ok · $8 round trip 1.13% · impact 1.66% · Pump.fun Amm
+11:12:02  ★ SCORE  $HEXN        71/100  mom 0 buys 20 act 15 turn 15 liq 15 hold 6
+11:12:02  ○ NO TRADE $HEXN       head of desk: stopped out on this coin recently, no re-entry
+11:12:02  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $303.0k · liq $47.8k · age 9h
+11:12:05  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.24% · impact 1.47% · Pump.fun Amm
+11:12:05  ★ SCORE  $Foxii       50/100  mom 0 buys 3 act 13 turn 15 liq 15 hold 4
+11:12:05  ○ NO TRADE $Foxii      head of desk: score 50 < 70
+11:12:05  ✖ KILL   $HI         rule 4 volume_1h   1h vol $41.5k < $50.0k (+1 more)
+11:12:05  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $14.0k < $50.0k (+1 more)
+11:12:05  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $11.6k < $50.0k (+1 more)
+11:12:05  ✖ KILL   $USOE       rule 4 volume_1h   1h vol $6.2k < $50.0k
+11:12:05  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $4.9k < $50.0k
+11:12:05  ✖ KILL   $HALVE      rule 4 volume_1h   1h vol $1.1k < $50.0k (+2 more)
+11:12:05  ✖ KILL   $FOREVER    rule 3 liquidity   liq $0.00 < $40.0k (+3 more)
+11:12:11  ● HOLD   T002 $HYPERCHAN +7.9% · mark $8.54 · stop $0.001788
+11:12:12  ▼ PAPER SELL T001 $CTO       -$1.11 (-13.88%, -2.31R) · stop -6%
+11:12:12  ⏸ COOLDOWN 30 min: 2 losses in a row, no revenge trades
+11:13:13  ● HOLD   T002 $HYPERCHAN +7.5% · mark $8.50 · stop $0.001788
+11:14:10  SCAN #5  592 tokens seen · 12 in window (30m-72h, $300k-$20M) · equity $98.87
+11:14:10  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.07M · liq $125.2k · age 8h
+11:14:10  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $417.5k · liq $60.9k · age 18h
+11:14:11  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.03% · impact 1.28% · Pump.fun Amm
+11:14:11  ★ SCORE  $HEXN        71/100  mom 0 buys 20 act 15 turn 15 liq 15 hold 6
+11:14:11  ○ NO TRADE $HEXN       head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:14:11  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $302.5k · liq $47.8k · age 9h
+11:14:13  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.24% · impact 1.22% · Pump.fun Amm
+11:14:13  ★ SCORE  $Foxii       50/100  mom 0 buys 3 act 13 turn 15 liq 15 hold 4
+11:14:13  ○ NO TRADE $Foxii      head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:14:13  ✖ KILL   $HI         rule 4 volume_1h   1h vol $41.2k < $50.0k (+1 more)
+11:14:13  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $14.1k < $50.0k (+1 more)
+11:14:13  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $10.8k < $50.0k (+1 more)
+11:14:13  ✖ KILL   $UDTF       rule 4 volume_1h   1h vol $6.0k < $50.0k
+11:14:13  ✖ KILL   $USDF       rule 4 volume_1h   1h vol $5.9k < $50.0k
+11:14:13  ✖ KILL   $USDA       rule 4 volume_1h   1h vol $5.8k < $50.0k
+11:14:13  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $4.3k < $50.0k
+11:14:13  ✖ KILL   $JAPRO      rule 3 liquidity   liq $0.08 < $40.0k (+4 more)
+11:14:13  ✖ KILL   $PREDICT    rule 3 liquidity   liq $0.00 < $40.0k (+4 more)
+11:14:17  ● HOLD   T002 $HYPERCHAN +9.0% · mark $8.62 · stop $0.001788
+11:15:18  ● HOLD   T002 $HYPERCHAN +9.6% · mark $8.67 · stop $0.001788
+11:16:16  SCAN #6  588 tokens seen · 8 in window (30m-72h, $300k-$20M) · equity $99.04
+11:16:16  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.09M · liq $125.8k · age 8h
+11:16:17  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $426.2k · liq $61.6k · age 18h
+11:16:18  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.45% · impact 2.56% · Pump.fun Amm
+11:16:18  ★ SCORE  $HEXN        86/100  mom 15 buys 20 act 15 turn 15 liq 15 hold 6
+11:16:18  ○ NO TRADE $HEXN       head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:16:18  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $318.8k · liq $49.1k · age 9h
+11:16:20  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.13% · impact 2.27% · Pump.fun Amm
+11:16:20  ★ SCORE  $Foxii       50/100  mom 0 buys 2 act 13 turn 15 liq 15 hold 5
+11:16:20  ○ NO TRADE $Foxii      head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:16:20  ✔ ALIVE  $JOB        8/8 rules pass · mcap $2.95M · liq $151.1k · age 64h
+11:16:27  ⇄ SELL TEST $JOB        ok · $8 round trip 1.7% · impact 1.26% · Pump.fun Amm
+11:16:27  ★ SCORE  $JOB         36/100  mom 11 buys 0 act 10 turn 0 liq 11 hold 5
+11:16:27  ○ NO TRADE $JOB        head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:16:28  ✖ KILL   $HI         rule 4 volume_1h   1h vol $40.4k < $50.0k (+1 more)
+11:16:28  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $13.7k < $50.0k (+1 more)
+11:16:29  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $12.9k < $50.0k (+1 more)
+11:16:30  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $4.0k < $50.0k
+11:16:30  ● HOLD   T002 $HYPERCHAN +10.2% · mark $8.72 · stop $0.001788
+11:16:54  telegram: owner paired (chat [hidden])
+11:17:30  ● HOLD   T002 $HYPERCHAN +10.5% · mark $8.74 · stop $0.001788
+11:18:28  SCAN #7  582 tokens seen · 10 in window (30m-72h, $300k-$20M) · equity $99.12
+11:18:28  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.12M · liq $126.7k · age 8h
+11:18:28  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $437.7k · liq $62.4k · age 18h
+11:18:29  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.13% · impact 1.88% · Pump.fun Amm
+11:18:29  ★ SCORE  $HEXN        92/100  mom 21 buys 20 act 15 turn 15 liq 15 hold 6
+11:18:29  ○ NO TRADE $HEXN       head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:18:29  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $327.3k · liq $49.8k · age 9h
+11:18:31  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.14% · impact 1.25% · Pump.fun Amm
+11:18:31  ★ SCORE  $Foxii       50/100  mom 0 buys 3 act 13 turn 15 liq 15 hold 5
+11:18:31  ○ NO TRADE $Foxii      head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:18:31  ✖ KILL   $HI         rule 4 volume_1h   1h vol $45.1k < $50.0k (+1 more)
+11:18:31  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $14.4k < $50.0k (+1 more)
+11:18:31  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $13.3k < $50.0k (+1 more)
+11:18:32  ✖ KILL   $USOE       rule 4 volume_1h   1h vol $6.1k < $50.0k
+11:18:32  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $4.2k < $50.0k
+11:18:32  ✖ KILL   $HALVE      rule 4 volume_1h   1h vol $1.0k < $50.0k (+2 more)
+11:18:33  ✖ KILL   $FOREVER    rule 3 liquidity   liq $0.00 < $40.0k (+3 more)
+11:18:33  ● HOLD   T002 $HYPERCHAN +10.8% · mark $8.77 · stop $0.001788
+11:19:34  ● HOLD   T002 $HYPERCHAN +5.2% · mark $8.32 · stop $0.001788
+11:20:31  SCAN #8  593 tokens seen · 12 in window (30m-72h, $300k-$20M) · equity $98.69
+11:20:31  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.12M · liq $126.9k · age 8h
+11:20:31  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $405.8k · liq $60.1k · age 18h
+11:20:32  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.8% · impact 2.02% · Pump.fun Amm
+11:20:32  ★ SCORE  $HEXN        78/100  mom 7 buys 20 act 15 turn 15 liq 15 hold 6
+11:20:32  ○ NO TRADE $HEXN       head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:20:32  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $356.0k · liq $52.0k · age 9h
+11:20:34  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.14% · impact 1.3% · Pump.fun Amm
+11:20:34  ★ SCORE  $Foxii       50/100  mom 0 buys 3 act 13 turn 15 liq 15 hold 5
+11:20:34  ○ NO TRADE $Foxii      head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:20:34  ✖ KILL   $HI         rule 4 volume_1h   1h vol $44.0k < $50.0k (+1 more)
+11:20:34  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $14.9k < $50.0k (+1 more)
+11:20:34  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $13.3k < $50.0k (+1 more)
+11:20:35  ✖ KILL   $UDTF       rule 4 volume_1h   1h vol $6.1k < $50.0k
+11:20:35  ✖ KILL   $USDF       rule 4 volume_1h   1h vol $5.9k < $50.0k
+11:20:36  ✖ KILL   $USDA       rule 4 volume_1h   1h vol $5.8k < $50.0k
+11:20:36  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $4.0k < $50.0k
+11:20:39  ✖ KILL   $JAPRO      rule 3 liquidity   liq $0.08 < $40.0k (+4 more)
+11:20:41  ✖ KILL   $PREDICT    rule 3 liquidity   liq $0.00 < $40.0k (+4 more)
+11:20:41  ◆ T002 $HYPERCHAN +12.9%: trailing stop ON
+11:20:41  ● HOLD   T002 $HYPERCHAN +12.9% · mark $8.93 · stop $0.001976 (trailing)
+11:21:42  ● HOLD   T002 $HYPERCHAN +9.4% · mark $8.65 · stop $0.001979 (trailing)
+11:22:39  SCAN #9  592 tokens seen · 8 in window (30m-72h, $300k-$20M) · equity $99.15
+11:22:39  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.09M · liq $125.9k · age 8h
+11:22:39  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $458.9k · liq $64.0k · age 18h
+11:22:40  ⇄ SELL TEST $HEXN       ok · $8 round trip 1.42% · impact 1.66% · Pump.fun Amm
+11:22:40  ★ SCORE  $HEXN        93/100  mom 22 buys 20 act 15 turn 15 liq 15 hold 6
+11:22:40  ○ NO TRADE $HEXN       head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:22:40  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $373.2k · liq $53.3k · age 9h
+11:22:42  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.13% · impact 1.38% · Pump.fun Amm
+11:22:42  ★ SCORE  $Foxii       49/100  mom 0 buys 3 act 13 turn 14 liq 15 hold 5
+11:22:42  ○ NO TRADE $Foxii      head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:22:43  ✔ ALIVE  $JOB        8/8 rules pass · mcap $2.95M · liq $151.2k · age 64h
+11:22:50  ⇄ SELL TEST $JOB        ok · $8 round trip 1.65% · impact 1.35% · Pump.fun Amm
+11:22:50  ★ SCORE  $JOB         37/100  mom 11 buys 0 act 10 turn 0 liq 11 hold 5
+11:22:50  ○ NO TRADE $JOB        head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:22:50  ✖ KILL   $HI         rule 4 volume_1h   1h vol $43.5k < $50.0k (+1 more)
+11:22:50  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $14.7k < $50.0k (+1 more)
+11:22:50  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $13.2k < $50.0k (+1 more)
+11:22:50  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $3.9k < $50.0k
+11:22:51  ● HOLD   T002 $HYPERCHAN +12.6% · mark $8.91 · stop $0.001979 (trailing)
+11:23:51  ● HOLD   T002 $HYPERCHAN +10.0% · mark $8.70 · stop $0.002014 (trailing)
+11:24:49  SCAN #10  582 tokens seen · 10 in window (30m-72h, $300k-$20M) · equity $99.07
+11:24:49  ✔ ALIVE  $HYPERCHAN  8/8 rules pass · mcap $2.18M · liq $128.4k · age 8h
+11:24:49  ✔ ALIVE  $HEXN       8/8 rules pass · mcap $496.3k · liq $66.6k · age 18h
+11:24:50  ⇄ SELL TEST $HEXN       ok · $8 round trip 2.72% · impact 1.7% · Pump.fun Amm
+11:24:50  ★ SCORE  $HEXN        96/100  mom 25 buys 20 act 15 turn 15 liq 15 hold 6
+11:24:50  ○ NO TRADE $HEXN       head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:24:50  ✔ ALIVE  $Foxii      8/8 rules pass · mcap $370.0k · liq $53.1k · age 9h
+11:24:52  ⇄ SELL TEST $Foxii      ok · $8 round trip 2.13% · impact 1.15% · Pump.fun Amm
+11:24:52  ★ SCORE  $Foxii       49/100  mom 0 buys 3 act 13 turn 14 liq 15 hold 5
+11:24:52  ○ NO TRADE $Foxii      head of desk: cooldown after 2 losses in a row (no revenge trades)
+11:24:52  ✖ KILL   $HI         rule 4 volume_1h   1h vol $44.2k < $50.0k (+1 more)
+11:24:52  ✖ KILL   $INVERSE    rule 4 volume_1h   1h vol $17.3k < $50.0k (+1 more)
+11:24:52  ✖ KILL   $jeff       rule 4 volume_1h   1h vol $13.6k < $50.0k (+1 more)
+11:24:52  ✖ KILL   $USOE       rule 4 volume_1h   1h vol $6.0k < $50.0k
+11:24:52  ✖ KILL   $FLOAT      rule 4 volume_1h   1h vol $3.9k < $50.0k
+11:24:52  ✖ KILL   $HALVE      rule 4 volume_1h   1h vol $1.0k < $50.0k (+2 more)
+11:24:52  ✖ KILL   $FOREVER    rule 3 liquidity   liq $0.00 < $40.0k (+3 more)
+11:24:53  ● HOLD   T002 $HYPERCHAN +10.6% · mark $8.75 · stop $0.002014 (trailing)
+11:25:24  ■ DONE  10 scans · 17 coins · 12 killed · 1 paper buys · equity $99.19 · report written
