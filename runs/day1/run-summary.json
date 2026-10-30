@@ -1,0 +1,61 @@
+{
+ "scans": 13,
+ "checks": 144,
+ "uniqueCoins": 18,
+ "killedCoins": 14,
+ "killsByRule": {
+  "4 volume_1h": 10,
+  "3 liquidity": 3,
+  "8 pumped_1h": 1
+ },
+ "honeypotKills": 0,
+ "lowScore": 19,
+ "fallingTape": 4,
+ "vetoes": 30,
+ "approved": 2,
+ "alive": 4,
+ "equity": 99.48705449801157,
+ "cash": 91.47000592035455,
+ "open": [
+  {
+   "id": "T002",
+   "mint": "3ApVr1xphYMpi9dn3rpqU4hwvpmCQDVwxET1rdCDpump",
+   "symbol": "HYPERCHAN",
+   "url": "https://dexscreener.com/solana/5mxppt9pftdyk624qq5lxbw1hfgr4ycqeafudkmtkyvy",
+   "decimals": 6,
+   "entryAt": "2026-10-30T09:53:34.148Z",
+   "entryPrice": 0.0019018396367308078,
+   "sizeUsd": 7.95,
+   "riskUsd": 0.4772,
+   "tokens": 4159.262351686722,
+   "tokensOriginal": 4159.262351686722,
+   "realizedUsd": 0,
+   "markUsd": 8.017048577657018,
+   "lastPrice": 0.0019275169248234205,
+   "stopPrice": 0.0017877292585269592,
+   "peakPrice": 0.002020236167423339,
+   "trailing": false,
+   "tpDone": [],
+   "score": 71
+  }
+ ],
+ "closed": [
+  {
+   "id": "T001",
+   "mint": "ANVLA6eKiAq4nstD2Sg3SZhfVkSEwfnGccn12UQWpump",
+   "symbol": "HEXN",
+   "entryAt": "2026-10-30T09:51:12.742Z",
+   "exitAt": "2026-10-30T09:52:10.126Z",
+   "entryPrice": 0.000675368396889093,
+   "exitPrice": 0.000632716030319618,
+   "sizeUsd": 8,
+   "riskUsd": 0.48,
+   "pnlUsd": -0.58,
+   "pnlPct": -7.25,
+   "R": -1.21,
+   "exitReason": "stop -6%",
+   "score": 80,
+   "url": "https://dexscreener.com/solana/bqjzersgugnhav8c1m3vc4wa6mgqbae8t2w7eptsdkw4"
+  }
+ ]
+}

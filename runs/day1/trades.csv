@@ -1,0 +1,4 @@
+time,trade_id,side,symbol,mint,price_usd,usd,qty,reason,pnl_usd,R
+"2026-10-30T09:51:12.742Z","T001","BUY","HEXN","ANVLA6eKiAq4nstD2Sg3SZhfVkSEwfnGccn12UQWpump","0.000675368396889093","8","11786.160022686356","score 80, risk 0.48 (1R), size $8.00","",""
+"2026-10-30T09:52:10.126Z","T001","SELL","HEXN","ANVLA6eKiAq4nstD2Sg3SZhfVkSEwfnGccn12UQWpump","0.000632716030319618","7.42000592035456","11786.160022686356","stop -6%","-0.58","-1.21"
+"2026-10-30T09:53:34.148Z","T002","BUY","HYPERCHAN","3ApVr1xphYMpi9dn3rpqU4hwvpmCQDVwxET1rdCDpump","0.0019018396367308078","7.95","4159.262351686722","score 71, risk 0.48 (1R), size $7.95","",""
