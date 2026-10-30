@@ -48,9 +48,22 @@ if a rule can't be checked with free data, the log says **unknown**. it never pr
 node src/run.js 25     # run the desk for 25 minutes (node 18+, no installs)
 ```
 
-every setting lives in [`config.json`](config.json) (soon editable from telegram).
+every setting lives in [`config.json`](config.json). the safe ones are editable from telegram.
 logs land in `logs/`: `console.log`, `trades.csv`, `events.jsonl`, and the head of desk's daily report.
 why each rule exists and where it lives in the code: [`RULES.md`](RULES.md).
+
+## telegram (the desk's phone line)
+
+```bash
+TELEGRAM_BOT_TOKEN=... node src/run.js 25   # token from @BotFather, env only, never in a file
+node --test test/*.test.js                   # owner lock + commands, telegram faked
+```
+
+- **locked to one owner.** first boot prints a one-time code. the first private chat that sends `/start CODE` owns the desk and the code burns. everyone else gets "this desk is private" and nothing else.
+- **commands (owner only):** `/status` `/pause` `/resume` `/report` `/settings` `/set <key> <value>` `/help`
+- **/set only takes whitelisted keys with safe ranges** (max per trade, risk per trade, stop, trailing, min score, daily loss limit, max open trades, min liq, min volume, scan speed, scan alerts). mode is not on the list: paper stays paper.
+- **alerts:** every scan summary, every 70+ pick with the head of desk's call, every paper buy and sell with p/l and R, stop-outs, "no revenge trade" vetoes, cooldowns, the daily loss freeze, the daily report. also written to `logs/alerts.jsonl`.
+- long polling today (no server). `handleUpdate()` is platform-agnostic so it drops into a cloudflare worker webhook later.
 
 ## free data only
 
@@ -59,7 +72,8 @@ dexscreener · rugcheck · jupiter quotes · geckoterminal. no paid APIs, no ser
 ## roadmap
 
 - [x] day 1: the brain, paper mode, live coins
-- [ ] telegram bot: alerts, /status, settings, approve/skip buttons
+- [x] day 2: telegram bot, owner lock, alerts, /status, /pause, /set
+- [ ] approve/skip buttons + panic button
 - [ ] cloudflare workers cron (free) + dashboard
 - [ ] 1-2 weeks of paper trading, judged on 20+ trades
 - [ ] live, only with a small burner wallet. never my main keys.

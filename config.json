@@ -61,6 +61,12 @@
     "paperFeePct": 0.5
   },
 
+  "telegram": {
+    "_note": "token is NEVER here: it comes from the TELEGRAM_BOT_TOKEN env var. The owner pairs once with /start <code>. Subscribers = chat ids that get read-only alerts.",
+    "scanAlerts": true,
+    "alertSubscribers": []
+  },
+
   "loop": {
     "scanEverySec": 120,
     "watchEverySec": 15,
