@@ -143,9 +143,10 @@
     "minLiqExitUsd": 15000
   },
   "telegram": {
-    "_note": "token is NEVER here: it comes from the TELEGRAM_BOT_TOKEN env var. The owner pairs once with /start <code>. Subscribers = chat ids that get read-only alerts.",
+    "_note": "token is NEVER here: it comes from the TELEGRAM_BOT_TOKEN env var. The owner pairs once with /start <code>. Subscribers = chat ids that get read-only alerts. scanDigestMin: one scan summary per hour (24/7 = 30 scans an hour); 0 = every scan.",
     "scanAlerts": true,
-    "alertSubscribers": []
+    "alertSubscribers": [],
+    "scanDigestMin": 60
   },
   "loop": {
     "scanEverySec": 120,

@@ -13,14 +13,15 @@ export const RULE_WORDS = {
   top10: 'top10 too big', dev: 'dev bag', bundled: 'bundled', pumped_1h: 'already pumped', sell_test: 'sell test',
 };
 
-export function scanAlert({ scan, checked, kills, passed, picks, sellFails, near, equity }) {
+export function scanAlert({ scan, scans = 1, minutes = 0, checked, kills, passed, picks, sellFails, near = 0, equity }) {
   const killed = Object.values(kills).reduce((a, b) => a + b, 0);
   const why = Object.entries(kills).sort((a, b) => b[1] - a[1]).map(([id, n]) => `${RULE_WORDS[id] || id} ${n}`).join(', ');
   return [
-    `🔎 scan #${scan} · ${checked} coins checked`,
+    minutes ? `🔎 last ${minutes >= 55 ? 'hour' : minutes + ' min'} · ${scans} scans · ${checked} coin checks` : `🔎 scan #${scan} · ${checked} coins checked`,
     `✖ ${killed} killed${why ? ` (${why})` : ''}`,
     `✔ ${passed} passed all 8 rules${picks ? ` · ${picks} scored 80+` : ''}`,
     ...(sellFails ? [`⇄ ${sellFails} failed the sell test`] : []),
+    ...(near ? [`◌ ${near} near miss${near === 1 ? '' : 'es'} logged (/nearmiss)`] : []),
     `balance $${equity.toFixed(2)}`,
   ].join('\n');
 }

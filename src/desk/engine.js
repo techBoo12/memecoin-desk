@@ -89,7 +89,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     run.scans++;
     const status = riskStatus(st, config);
     const sc = await scout({ config, log, scanNo: run.scans, between: maybeWatch });
-    S.scan = { phase: 'deep', queue: sc.candidates, sum: { scan: run.scans, checked: 0, kills: {}, passed: 0, picks: 0, near: 0, sellFails: 0 } };
+    S.scan = { phase: 'deep', nearStart: run.nearMisses, queue: sc.candidates, sum: { scan: run.scans, checked: 0, kills: {}, passed: 0, picks: 0, near: 0, sellFails: 0 } };
     ev('scan', { scan: run.scans, tokensSeen: sc.tokensSeen, inWindow: sc.pairsInWindow, checking: sc.candidates.length },
       `SCAN #${run.scans}  ${sc.tokensSeen} tokens seen · ${sc.pairsInWindow} in window · checking ${sc.candidates.length} · equity $${status.equity.toFixed(2)}`);
     S.timers.nextScan = now() + config.loop.scanEverySec * 1000;
@@ -104,7 +104,16 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     for (const c of chunk) await checkCoin(c, sum);
     if (!S.scan.queue.length) {
       S.scan.phase = 'idle';
-      notify('scan', alert.scanAlert({ ...sum, equity: riskStatus(st, config).equity }));
+      // 24/7 = 30 scans an hour, so telegram gets one scan digest per hour (telegram.scanDigestMin), not one per scan
+      const every = (config.telegram?.scanDigestMin ?? 0) * 60_000;
+      const agg = (S.timers.scanAgg ||= { from: now(), scans: 0, checked: 0, kills: {}, passed: 0, picks: 0, sellFails: 0, near: 0, nearStart: S.scan.nearStart ?? run.nearMisses });
+      agg.scans++; agg.checked += sum.checked; agg.passed += sum.passed; agg.picks += sum.picks; agg.sellFails += sum.sellFails;
+      for (const [k, v] of Object.entries(sum.kills)) agg.kills[k] = (agg.kills[k] || 0) + v;
+      agg.near = run.nearMisses - agg.nearStart;
+      if (!every || now() - agg.from >= every) {
+        notify('scan', alert.scanAlert({ ...agg, scan: run.scans, minutes: every ? Math.round((now() - agg.from) / 60000) : 0, equity: riskStatus(st, config).equity }));
+        S.timers.scanAgg = null;
+      }
     }
     dirty('scan', 'run', 'desk');
     return 'deep';
