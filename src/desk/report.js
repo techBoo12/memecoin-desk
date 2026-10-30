@@ -12,8 +12,8 @@ import { summarize, outcome } from './nearmiss.js';
 const signed = (x, d = 2) => `${x >= 0 ? '+' : ''}${Number(x).toFixed(d)}`;
 const money = (x) => `${x < 0 ? '-' : '+'}$${Math.abs(x).toFixed(2)}`;
 
-export function windowStats(st, since) {
-  const t = st.closed.filter((x) => Date.parse(x.entryAt) >= since);
+export function windowStats(st, since, which = 'bot') {
+  const t = st.closed.filter((x) => Date.parse(x.entryAt) >= since && (which === 'manual' ? x.source === 'manual' : x.source !== 'manual'));
   const wins = t.filter((x) => x.pnlUsd > 0), losses = t.filter((x) => x.pnlUsd <= 0);
   const sumR = t.reduce((s, x) => s + x.R, 0);
   return { t, n: t.length, wins: wins.length, losses: losses.length, winRate: t.length ? wins.length / t.length : 0,
@@ -25,6 +25,7 @@ export function testReportText({ S, config, now = Date.now() }) {
   const st = S.desk, run = S.run, t = st.test || { startedAt: run.since, hours: 24, equityAtStart: st.startBalance };
   const since = t.startedAt;
   const w = windowStats(st, since);
+  const wm = windowStats(st, since, 'manual');
   const eq = equity(st);
   const open = st.positions.filter((p) => Date.parse(p.entryAt) >= since);
   const carried = st.positions.filter((p) => Date.parse(p.entryAt) < since);
@@ -43,6 +44,7 @@ export function testReportText({ S, config, now = Date.now() }) {
     `p/l ${money(w.pnl)} · ${signed(w.sumR)}R total · expectancy ${signed(w.expectancy)}R/trade`,
     w.n ? `avg win ${signed(w.avgWin)}R · avg loss ${signed(w.avgLoss)}R` : 'no closed trades in this window',
     ...tradeLines,
+    ...(wm.n ? [`your manual trades (not in the bot's stats): ${wm.n} · p/l ${money(wm.pnl)} · ${signed(wm.sumR)}R`] : []),
     open.length ? `still open: ${open.map((p) => `$${p.symbol} ${signed(((p.lastPrice / p.entryPrice) - 1) * 100, 1)}%`).join(', ')}` : '',
     carried.length ? `carried from before the test: ${carried.map((p) => '$' + p.symbol).join(', ')}` : '',
     '',
@@ -86,6 +88,7 @@ export function tradesText(st, { limit = 4 } = {}) {
 
 export function whyIn(why, score) {
   if (!why) return `score ${score} (before day 3: no reason log)`;
+  if (why.manual) return `manual buy by you · score ${why.score} · ${why.rulesPassed}/8 rules · quality ${why.quality} · ${why.safety}`;
   const p = why.parts || {};
   return `score ${why.score} (mom ${p.momentum}, buys ${p.buyPressure}, activity ${p.activity}, turnover ${p.turnover}, liq ${p.liqMcap}, holders ${p.holders}) · 8/8 rules · quality ${why.quality.length}/${why.quality.length} · ${why.buys} buys · holders ${why.holders} · ${why.tape}`;
 }

@@ -77,6 +77,7 @@ export function manage(pos, priceUsd, config) {
 
 // after every closed trade: streaks, cooldown, no-revenge list
 export function afterClose(state, trade, config) {
+  if (trade.source === 'manual') return { cooldown: false }; // her own trades don't put the bot in cooldown
   if (trade.pnlUsd < 0) state.lossStreak += 1; else state.lossStreak = 0;
   if (state.lossStreak >= config.risk.lossStreakForCooldown) {
     state.cooldownUntil = Date.now() + config.risk.cooldownMin * 60_000;

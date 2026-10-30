@@ -19,7 +19,7 @@ export function review(proposal, status, state, config) {
   if (state.positions.length >= config.risk.maxOpenPositions) return veto(`max ${config.risk.maxOpenPositions} open positions`);
   const cap = config.quality?.maxTradesPerDay;
   const day = new Date().toISOString().slice(0, 10);
-  const today = [...state.positions, ...state.closed].filter((t) => String(t.entryAt).slice(0, 10) === day).length;
+  const today = [...state.positions, ...state.closed].filter((t) => t.source !== 'manual' && String(t.entryAt).slice(0, 10) === day).length; // her manual buys don't eat the bot's daily cap
   if (cap && today >= cap) return veto(`daily trade cap: ${today}/${cap} trades today (quality over quantity)`);
   if (!a.passes) return veto(`score ${a.score} < ${config.analyst.passScore}`);
   if (!a.tapeOk) return veto(`falling tape (5m ${a.tape.m5}%, 1h ${a.tape.h1}%), wait for confirmation`);
@@ -28,8 +28,10 @@ export function review(proposal, status, state, config) {
   return { approved: true, reason: `score ${a.score}, risk ${size.riskUsd.toFixed(2)} (1R), size $${size.sizeUsd.toFixed(2)}` };
 }
 
-export function stats(state) {
-  const t = state.closed;
+// the bot's own record. manual trades (her buys from the button menu) are counted apart: stats(state, 'manual')
+export const isManual = (t) => t.source === 'manual';
+export function stats(state, which = 'bot') {
+  const t = state.closed.filter((x) => (which === 'manual' ? isManual(x) : which === 'all' ? true : !isManual(x)));
   const wins = t.filter((x) => x.pnlUsd > 0);
   const losses = t.filter((x) => x.pnlUsd <= 0);
   const avg = (xs, f) => (xs.length ? xs.reduce((s, x) => s + f(x), 0) / xs.length : 0);

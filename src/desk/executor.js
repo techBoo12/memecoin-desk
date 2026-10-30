@@ -58,6 +58,7 @@ export function sellPaper(state, pos, fraction, priceUsd, reason, config, { ofOr
       entryPrice: pos.entryPrice, exitPrice: priceUsd, sizeUsd: pos.sizeUsd, riskUsd: pos.riskUsd,
       pnlUsd: +pnlUsd.toFixed(4), pnlPct: +((pnlUsd / pos.sizeUsd) * 100).toFixed(2),
       R: +(pnlUsd / pos.riskUsd).toFixed(2), exitReason: reason, score: pos.score, url: pos.url,
+      ...(pos.source === 'manual' ? { source: 'manual' } : {}), // day 4: her own buys from the button menu, kept out of the bot's stats
     };
     state.closed.push(trade);
     return { fill, trade };
