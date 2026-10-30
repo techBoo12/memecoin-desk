@@ -1,0 +1,69 @@
+{
+  "_note": "ONE config for the whole desk. Every number here will be editable from Telegram later. Money is fake: PAPER mode only.",
+  "mode": "paper",
+  "topRule": "protect the balance first, profit second",
+
+  "account": {
+    "startingBalanceUsd": 100,
+    "weeklyGoalPct": 15,
+    "weeklyMaxDrawdownPct": 12,
+    "dailyLossLimitPct": 5
+  },
+
+  "scout": {
+    "dexes": ["pumpswap", "raydium"],
+    "minAgeMin": 30,
+    "maxAgeMin": 4320,
+    "minMcapUsd": 300000,
+    "maxMcapUsd": 20000000,
+    "geckoTerminal": true,
+    "searchQueries": ["pumpswap", "raydium", "pump", "sol", "meme", "cat", "dog", "ai", "trump", "pepe", "moon", "inu", "frog", "elon", "baby", "wif", "bonk", "agent", "chill", "based", "coin", "wojak", "gm", "lol", "goat", "shib", "penguin", "monkey", "bull", "rocket", "king", "doge", "chad", "mog", "giga", "fart", "sigma", "grok", "robot", "nigeria", "africa", "kitty", "bear", "money", "pump it"],
+    "maxCandidatesPerScan": 40
+  },
+
+  "filter": {
+    "minLiquidityUsd": 40000,
+    "minVolume1hUsd": 50000,
+    "maxTop10Pct": 25,
+    "maxDevPct": 3,
+    "maxBundledPct": 10,
+    "maxPump1hPct": 80,
+    "minLpLockedPct": 90,
+    "unknownIsKill": ["mint_freeze", "lp_locked", "top10"]
+  },
+
+  "honeypot": {
+    "testSizeUsd": 8,
+    "maxRoundTripLossPct": 8,
+    "maxPriceImpactPct": 3,
+    "slippageBps": 300
+  },
+
+  "analyst": {
+    "passScore": 70,
+    "requireUptrend": true
+  },
+
+  "risk": {
+    "riskPerTradePct": 0.5,
+    "maxPositionPct": 8,
+    "stopLossPct": 6,
+    "trailActivatePct": 12,
+    "trailDistancePct": 8,
+    "takeProfitLadder": [
+      { "atMultiple": 2, "sellPct": 30 },
+      { "atMultiple": 5, "sellPct": 30 }
+    ],
+    "maxOpenPositions": 3,
+    "lossStreakForCooldown": 2,
+    "cooldownMin": 30,
+    "noReentryAfterStopMin": 240,
+    "paperFeePct": 0.5
+  },
+
+  "loop": {
+    "scanEverySec": 120,
+    "watchEverySec": 15,
+    "runMinutes": 25
+  }
+}
