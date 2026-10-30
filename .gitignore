@@ -3,3 +3,6 @@ node_modules/
 *.key
 state/
 logs/*.jsonl
+.dev.vars
+.wrangler/
+logs/

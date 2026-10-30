@@ -1,0 +1,25 @@
+# Cloudflare Workers (free plan) deploy for the memecoin desk.
+#   npx wrangler deploy
+# Secrets (never in this file):  npx wrangler secret put TELEGRAM_BOT_TOKEN
+#   also OWNER_CHAT_ID, TG_WEBHOOK_SECRET, ADMIN_KEY. See cloudflare/README.md
+name = "memecoin-desk"
+main = "src/cloudflare/worker.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+# the watchdog: once a minute (the free plan's fastest cron) it makes sure the
+# desk's own Durable Object alarm loop is running. The loop itself ticks every few seconds.
+[triggers]
+crons = ["* * * * *"]
+
+[[durable_objects.bindings]]
+name = "DESK"
+class_name = "Desk"
+
+# SQLite-backed Durable Objects are the ones the free plan includes
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Desk"]
+
+[observability]
+enabled = true
