@@ -11,7 +11,7 @@ import { getJSON } from '../lib/http.js';
 const DS = 'https://api.dexscreener.com';
 let geckoPage = 0;
 
-export async function scout({ config, log }) {
+export async function scout({ config, log, scanNo = 0 }) {
   const cfg = config.scout;
   const mints = new Set();
   const directPairs = [];
@@ -21,11 +21,17 @@ export async function scout({ config, log }) {
   for (const path of feeds) {
     const r = await getJSON(DS + path, { minGapMs: 1100 });
     if (!r.ok || !Array.isArray(r.data)) { log.warn(`scout: feed ${path} failed (${r.status || r.error})`); continue; }
+    if (r.data.length > 60) r.data.length = 60;
     for (const t of r.data) if (t.chainId === 'solana' && t.tokenAddress) mints.add(t.tokenAddress);
   }
 
-  // 2) live pair search on the dexes we care about
-  for (const q of cfg.searchQueries) {
+  // 2) live pair search on the dexes we care about. A rotating slice of the
+  //    query list per scan keeps each scan small (Cloudflare free plan: 50
+  //    outbound calls per step); every query still comes round every few scans.
+  const per = cfg.searchQueriesPerScan || cfg.searchQueries.length;
+  const start = (scanNo * per) % cfg.searchQueries.length;
+  const queries = [...cfg.searchQueries, ...cfg.searchQueries].slice(start, start + per);
+  for (const q of queries) {
     const r = await getJSON(`${DS}/latest/dex/search?q=${encodeURIComponent(q)}`, { minGapMs: 300 });
     for (const p of r.data?.pairs || []) if (p.chainId === 'solana') { directPairs.push(p); mints.add(p.baseToken.address); }
   }
@@ -46,7 +52,8 @@ export async function scout({ config, log }) {
   // 3) full pair data for every mint, 30 per call
   const list = [...mints];
   const pairs = [...directPairs];
-  for (let i = 0; i < list.length; i += 30) {
+  const maxBatches = cfg.maxTokenBatches || 8;
+  for (let i = 0; i < list.length && i / 30 < maxBatches; i += 30) {
     const r = await getJSON(`${DS}/tokens/v1/solana/${list.slice(i, i + 30).join(',')}`, { minGapMs: 300 });
     if (Array.isArray(r.data)) pairs.push(...r.data);
   }

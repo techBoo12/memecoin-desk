@@ -8,13 +8,14 @@
 //      in config.json (telegram.alertSubscribers) and can't run commands.
 // HARD STOP: no command runs for anyone but the owner. Ever.
 // ============================================================================
-import crypto from 'node:crypto';
+// Web Crypto only (no node:crypto), so this file runs in Node AND on Cloudflare Workers.
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I
 
 export function newPairingCode(n = 6) {
+  const r = globalThis.crypto.getRandomValues(new Uint32Array(n)); // 32 letters: no modulo bias
   let s = '';
-  for (let i = 0; i < n; i++) s += ALPHABET[crypto.randomInt(ALPHABET.length)];
+  for (let i = 0; i < n; i++) s += ALPHABET[r[i] % ALPHABET.length];
   return s;
 }
 
@@ -28,9 +29,13 @@ export async function loadLock(store) {
   return lock;
 }
 
+// constant-time compare: same work whether the first or the last letter is wrong
 const sameCode = (a, b) => {
-  const x = Buffer.from(String(a).toUpperCase()), y = Buffer.from(String(b));
-  return x.length === y.length && crypto.timingSafeEqual(x, y);
+  const x = String(a).toUpperCase(), y = String(b);
+  if (x.length !== y.length) return false;
+  let d = 0;
+  for (let i = 0; i < x.length; i++) d |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return d === 0;
 };
 
 // who is talking? 'owner' | 'pair' | 'subscriber' | 'stranger'
