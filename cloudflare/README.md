@@ -22,7 +22,9 @@ cron (every minute) ──▶ watchdog: restarts the alarm loop if it ever stopp
 npx wrangler deploy
 npx wrangler secret put TELEGRAM_BOT_TOKEN      # paste, never echo
 # point telegram at the worker (secret_token = TG_WEBHOOK_SECRET)
-curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -d url=https://memecoin-desk.<you>.workers.dev/tg -d secret_token=$TG_WEBHOOK_SECRET
+# day 4: the button menu needs callback_query in allowed_updates
+curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -H 'content-type: application/json' \
+  -d '{"url":"https://memecoin-desk.<you>.workers.dev/tg","secret_token":"'$TG_WEBHOOK_SECRET'","allowed_updates":["message","callback_query"]}'
 # start a 24h paper test
 curl -s -X POST https://memecoin-desk.<you>.workers.dev/admin/init -H "x-admin-key: $ADMIN_KEY" -d '{"startTestHours":24}'
 ```

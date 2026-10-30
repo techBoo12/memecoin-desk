@@ -81,6 +81,24 @@ node src/run.js 25 --test 24   # local: run 25 min and start a 24h test window
 node --test test/*.test.js     # no network needed
 ```
 
+## day 4: the button menu (tap instead of type)
+
+trojan-style panel in telegram, own branding, still paper money only.
+
+- **🏠 home panel:** balance, today p/l, open positions, desk running/paused, auto-buy on/off. one message, edited in place, not a new message per tap
+- **🟢 buy:** paste a solana token address. the desk runs the same checks it runs on its own picks (8 kill rules, jupiter sell test, score, quality gate) and shows the card. then `$5` `$10` `$25` `custom`. failed safety = an extra "buy anyway (paper)" tap. fills at a live jupiter quote for the exact amount
+- **🔴 sell / 📂 positions:** a card per position (entry, now, p/l %, R, stop, next take profit) with `25%` `50%` `100%`. partial sells count what was already sold + what's left
+- **manual trades are tagged `manual`** and kept out of the bot's own stats (win rate, R, daily trade cap, loss-streak cooldown). the desk's stop / trail / take profit still protect them
+- **⚙️ settings:** tap ➖ ➕ for stop, take profit, trailing, min score, trades/day, max open, slippage; toggles for auto-buy and alerts (all / trades only). same safe ranges as `/set`. mode is not on the list: paper stays paper
+- **👀 near misses · 📋 report · ⏸ pause/resume · 🔄 refresh** on buttons too. every old command still works, plus `/menu`
+- **owner lock on every tap:** anyone else tapping a button gets "this desk is private", nothing runs. old buttons get a fresh panel, not an error
+
+```bash
+node --test test/*.test.js                 # 23 tests, telegram + market faked
+npx wrangler dev                           # the worker in cloudflare's runtime, locally
+node test/local/menu_run.mjs seed.json     # drives the whole menu against a FAKE telegram (no token)
+```
+
 ## free data only
 
 dexscreener · rugcheck · jupiter quotes · geckoterminal. no paid APIs, no server bill.
@@ -89,7 +107,7 @@ dexscreener · rugcheck · jupiter quotes · geckoterminal. no paid APIs, no ser
 
 - [x] day 1: the brain, paper mode, live coins
 - [x] day 2: telegram bot, owner lock, alerts, /status, /pause, /set
-- [ ] approve/skip buttons + panic button
+- [x] day 4: button menu: buy / sell / positions / settings / pause, owner lock on every tap
 - [x] day 3: quality filter, 3 s exits, near-miss tracker, trade reasons, 24/7 on cloudflare (free)
 - [x] live dashboard (public, read-only)
 - [ ] 1-2 weeks of paper trading, judged on 20+ trades
