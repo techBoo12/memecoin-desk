@@ -180,6 +180,14 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     const size = sizeTrade(st, config);
     const verdict = review({ c, a, size, q }, riskStatus(st, config), st, config);
     sum.picks++;
+    if (verdict.approved && config.autoBuy === false) {
+      // day 4: auto-buy switched off in ⚙️ settings. the desk still finds and checks everything, she decides
+      run.vetoes++;
+      ev('no_trade', { mint: c.mint, symbol: c.symbol, score: a.score, reason: 'auto-buy off' }, `○ NO TRADE ${sym(c)} auto-buy is off (would have bought: ${verdict.reason})`);
+      notify('pick_ready', `🟡 $${c.symbol} passed every check (score ${a.score}, quality ${q.passedCount}/${q.total}) but auto-buy is off\npaste this to buy it yourself (paper):\n${c.mint}`, { dedupeKey: `ready:${c.mint}`, dedupeMs: 2 * 3.6e6 });
+      nearMiss(c, 'head', [{ id: 'auto_buy_off', note: 'auto-buy off: the desk would have bought this' }], nmBase);
+      return;
+    }
     const vkey = verdict.approved ? 'ok' : verdict.reason.replace(/[\d.-]+/g, '#');
     notify('pick', alert.pickAlert({ symbol: c.symbol, score: a.score, mcap: c.mcap, liq: c.liqUsd, ageMin: c.ageMin, verdict, q }),
       verdict.approved ? {} : { dedupeKey: `pick:${c.mint}:${vkey}` });
@@ -331,6 +339,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
 
   return {
     tick, watch, scanDiscover, scanDeep, nearMissStep, snapshot, S,
+    event: (type, line) => ev(type, {}, line), // day 4: manual trades from the button menu land in the same live feed
     startTest(hours = 24) {
       st.test = { startedAt: now(), endsAt: now() + hours * 3.6e6, hours, n: 1, equityAtStart: equity(st), closedAtStart: st.closed.length, reportSentAt: null };
       S.run = newRun(); Object.assign(run, S.run); S.run = run;

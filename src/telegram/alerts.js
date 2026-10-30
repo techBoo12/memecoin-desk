@@ -8,6 +8,14 @@ const sp = (x) => (x >= 1 ? x.toFixed(4) : x.toPrecision(4));
 const usd = (x) => (x >= 1e6 ? `$${(x / 1e6).toFixed(1)}m` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Number(x).toFixed(0)}`);
 const signed = (x, d = 2) => `${x >= 0 ? '+' : ''}${Number(x).toFixed(d)}`;
 
+// alert level (day 4 ⚙️): 'trades' = only what moves money or freezes the desk; 'all' adds scan digests + picks
+export const CHATTY_KINDS = ['scan', 'pick'];
+export function alertAllowed(kind, config) {
+  if (kind === 'scan' && config.telegram?.scanAlerts === false) return false;
+  if (config.telegram?.alertLevel === 'trades' && CHATTY_KINDS.includes(kind)) return false;
+  return true;
+}
+
 export const RULE_WORDS = {
   mint_freeze: 'mint/freeze live', lp_locked: 'lp not locked', liquidity: 'low liq', volume_1h: 'low volume',
   top10: 'top10 too big', dev: 'dev bag', bundled: 'bundled', pumped_1h: 'already pumped', sell_test: 'sell test',

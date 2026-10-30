@@ -24,7 +24,13 @@ export const SETTINGS = {
   minbuys:     { path: 'quality.minBuyShare1h', min: 0.5, max: 0.8, label: 'min share of 1h txns that are buys (0.55 = 55%)' },
   minliqmcap:  { path: 'quality.minLiqToMcap', min: 0.02, max: 0.5, label: 'min liquidity / market cap (0.08 = 8%)' },
   watchevery:  { path: 'loop.watchEverySec', min: 2, max: 30, int: true, unit: 's', label: 'check open trades every (seconds)' },
+  // day 4 (button menu): same rules, now also tappable in ⚙️ settings
+  tp:          { path: 'risk.takeProfitLadder.0.atMultiple', min: 1.2, max: 10, unit: 'x', label: 'first take profit at (x entry)' },
+  slippage:    { path: 'honeypot.slippageBps', scale: 100, min: 0.5, max: 10, unit: '%', label: 'max slippage on quotes + paper fills' },
+  autobuy:     { path: 'autoBuy', bool: true, label: 'auto-buy: the desk buys its own picks on/off' },
+  alerts:      { path: 'telegram.alertLevel', choices: ['all', 'trades'], label: 'alerts: all, or trades only (no scan digests / picks)' },
 };
+// mode is deliberately missing: paper stays paper.
 
 export const normKey = (k) => String(k || '').toLowerCase().replace(/[^a-z]/g, '');
 
@@ -35,13 +41,19 @@ function setPath(obj, p, v) {
   o[ks.at(-1)] = v;
 }
 
+const toStored = (spec, v) => (spec.scale ? Math.round(v * spec.scale) : v);
+const fromStored = (spec, v) => (spec.scale && v != null ? +(v / spec.scale).toFixed(4) : v);
+export const getSetting = (config, key) => fromStored(SETTINGS[key], getPath(config, SETTINGS[key].path));
+
 export function applyOverrides(config, overrides = {}) {
-  for (const [key, v] of Object.entries(overrides)) if (SETTINGS[key]) setPath(config, SETTINGS[key].path, v);
+  for (const [key, v] of Object.entries(overrides)) if (SETTINGS[key]) setPath(config, SETTINGS[key].path, toStored(SETTINGS[key], v));
   return config;
 }
 
 export function showValue(spec, v) {
-  if (spec.bool) return v ? 'on' : 'off';
+  if (spec.bool) return v === false ? 'off' : 'on'; // unset = on (autoBuy defaults on)
+  if (spec.choices) return v == null ? spec.choices[0] : String(v);
+  if (spec.unit === 'x') return `${v}x`;
   if (spec.unit === '$') return `$${Number(v).toLocaleString('en-US')}`;
   return `${v}${spec.unit === '%' ? '%' : spec.unit === 's' ? 's' : ''}`;
 }
@@ -53,7 +65,11 @@ export function parseValue(spec, raw) {
     if (['off', 'false', 'no', '0'].includes(s)) return { ok: true, value: false };
     return { ok: false, error: 'use on or off' };
   }
-  const m = s.replace(/[$,%\s]/g, '').match(/^(\d+(?:\.\d+)?)(k|m)?$/);
+  if (spec.choices) {
+    const c = spec.choices.find((x) => x === s || (s.startsWith('trade') && x === 'trades'));
+    return c ? { ok: true, value: c } : { ok: false, error: `use ${spec.choices.join(' or ')}` };
+  }
+  const m = s.replace(/[$,%x\s]/g, '').match(/^(\d+(?:\.\d+)?)(k|m)?$/);
   if (!m) return { ok: false, error: 'that is not a number' };
   let v = Number(m[1]) * (m[2] === 'k' ? 1e3 : m[2] === 'm' ? 1e6 : 1);
   if (spec.int) v = Math.round(v);
@@ -68,12 +84,29 @@ export function changeSetting(config, overrides, rawKey, rawValue) {
   if (!spec) return { ok: false, error: `"${rawKey}" can't be changed from here. /settings shows what can` };
   const p = parseValue(spec, rawValue);
   if (!p.ok) return { ok: false, error: `${key} ${p.error}` };
-  const old = getPath(config, spec.path);
-  setPath(config, spec.path, p.value);
+  const old = getSetting(config, key);
+  setPath(config, spec.path, toStored(spec, p.value));
   overrides[key] = p.value;
   return { ok: true, key, spec, old, value: p.value };
 }
 
 export function listSettings(config) {
-  return Object.entries(SETTINGS).map(([key, spec]) => ({ key, spec, value: getPath(config, spec.path) }));
+  return Object.entries(SETTINGS).map(([key, spec]) => ({ key, spec, value: getSetting(config, key) }));
+}
+
+// one tap on a ⚙️ stepper: nudge a number by its step, flip a toggle, cycle a choice.
+// goes through changeSetting, so the SAME whitelist + ranges as /set apply.
+export const STEPS = { stop: 1, tp: 0.5, trailat: 2, trail: 1, minscore: 5, maxtrades: 1, maxopen: 1, slippage: 0.5 };
+export function stepSetting(config, overrides, key, dir) {
+  const spec = SETTINGS[key];
+  if (!spec) return { ok: false, error: 'not a setting' };
+  const cur = getSetting(config, key);
+  if (spec.bool) return changeSetting(config, overrides, key, cur === false ? 'on' : 'off');
+  if (spec.choices) { const i = spec.choices.indexOf(cur ?? spec.choices[0]); return changeSetting(config, overrides, key, spec.choices[(i + 1) % spec.choices.length]); }
+  const step = STEPS[key];
+  if (!step) return { ok: false, error: `${key} has no stepper, use /set` };
+  let next = +(Number(cur) + (dir < 0 ? -step : step)).toFixed(4);
+  next = Math.min(spec.max, Math.max(spec.min, next));
+  if (next === cur) return { ok: false, edge: true, error: `${key} is already at its ${dir < 0 ? 'minimum' : 'maximum'} (${showValue(spec, cur)})` };
+  return changeSetting(config, overrides, key, String(next));
 }

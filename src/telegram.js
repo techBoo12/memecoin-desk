@@ -13,6 +13,7 @@ import path from 'node:path';
 import { createTelegramClient } from './telegram/client.js';
 import { loadLock, classify, pairOwner, PRIVATE_TEXT, SUBSCRIBER_TEXT } from './telegram/lock.js';
 import { runCommand, HELP } from './telegram/commands.js';
+import { alertAllowed } from './telegram/alerts.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -54,7 +55,7 @@ export async function createTelegramBot({ store, desk, config, log, logDir, toke
       if (last && Date.now() - last < dedupeMs) return false;
       dedupe.set(dedupeKey, Date.now());
     }
-    if (kind === 'scan' && config.telegram?.scanAlerts === false) return false;
+    if (!alertAllowed(kind, config)) return false;
     const to = [lock.ownerChatId, ...(config.telegram?.alertSubscribers || [])].filter(Boolean);
     const sent = Boolean(client && to.length);
     fs.appendFileSync(sink, JSON.stringify({ ts: new Date().toISOString(), kind, text, delivery: sent ? 'sent to owner' : 'queued: owner not paired yet' }) + '\n');
