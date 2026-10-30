@@ -11,7 +11,9 @@ import { getJSON } from '../lib/http.js';
 const DS = 'https://api.dexscreener.com';
 let geckoPage = 0;
 
-export async function scout({ config, log, scanNo = 0 }) {
+export async function scout({ config, log, scanNo = 0, between = async () => {} }) {
+  // `between` runs after every network call: the engine uses it to keep
+  // watching open trades every few seconds while a scan is running
   const cfg = config.scout;
   const mints = new Set();
   const directPairs = [];
@@ -19,7 +21,7 @@ export async function scout({ config, log, scanNo = 0 }) {
   // 1) where new coins show up first: fresh profiles, boosts, takeovers
   const feeds = ['/token-profiles/latest/v1', '/token-boosts/latest/v1', '/token-boosts/top/v1', '/community-takeovers/latest/v1'];
   for (const path of feeds) {
-    const r = await getJSON(DS + path, { minGapMs: 1100 });
+    const r = await getJSON(DS + path, { minGapMs: 1100 }); await between();
     if (!r.ok || !Array.isArray(r.data)) { log.warn(`scout: feed ${path} failed (${r.status || r.error})`); continue; }
     if (r.data.length > 60) r.data.length = 60;
     for (const t of r.data) if (t.chainId === 'solana' && t.tokenAddress) mints.add(t.tokenAddress);
@@ -32,7 +34,7 @@ export async function scout({ config, log, scanNo = 0 }) {
   const start = (scanNo * per) % cfg.searchQueries.length;
   const queries = [...cfg.searchQueries, ...cfg.searchQueries].slice(start, start + per);
   for (const q of queries) {
-    const r = await getJSON(`${DS}/latest/dex/search?q=${encodeURIComponent(q)}`, { minGapMs: 300 });
+    const r = await getJSON(`${DS}/latest/dex/search?q=${encodeURIComponent(q)}`, { minGapMs: 300 }); await between();
     for (const p of r.data?.pairs || []) if (p.chainId === 'solana') { directPairs.push(p); mints.add(p.baseToken.address); }
   }
 
@@ -40,7 +42,7 @@ export async function scout({ config, log, scanNo = 0 }) {
   if (cfg.geckoTerminal) {
     geckoPage = (geckoPage % 3) + 1; // rotate pages across scans to stay under the free limit
     for (const path of [`/networks/solana/trending_pools?page=${geckoPage}`, `/networks/solana/dexes/pumpswap/pools?page=${geckoPage}`]) {
-      const r = await getJSON(`https://api.geckoterminal.com/api/v2${path}`, { minGapMs: 4000, retries: 1 });
+      const r = await getJSON(`https://api.geckoterminal.com/api/v2${path}`, { minGapMs: 4000, retries: 1 }); await between();
       if (!r.ok) { log.event('warn', { source: 'geckoterminal', path, status: r.status || r.error }); continue; }
       for (const pool of r.data?.data || []) {
         const id = pool.relationships?.base_token?.data?.id || '';
@@ -54,7 +56,7 @@ export async function scout({ config, log, scanNo = 0 }) {
   const pairs = [...directPairs];
   const maxBatches = cfg.maxTokenBatches || 8;
   for (let i = 0; i < list.length && i / 30 < maxBatches; i += 30) {
-    const r = await getJSON(`${DS}/tokens/v1/solana/${list.slice(i, i + 30).join(',')}`, { minGapMs: 300 });
+    const r = await getJSON(`${DS}/tokens/v1/solana/${list.slice(i, i + 30).join(',')}`, { minGapMs: 300 }); await between();
     if (Array.isArray(r.data)) pairs.push(...r.data);
   }
 

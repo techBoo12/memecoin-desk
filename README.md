@@ -74,6 +74,7 @@ node --test test/*.test.js                   # owner lock + commands, telegram f
 - **near-miss tracker:** every coin it almost bought, with the exact reason, re-checked at +15m/+1h/+4h/+24h. are the rules too strict, or saving us?
 - **a reason on every trade:** why in (score parts, rules, quality checks, sell test), why out (stop, trail, tp, emergency)
 - **24/7 on cloudflare's free plan:** worker + durable object alarm loop + telegram webhook. see [`cloudflare/README.md`](cloudflare/README.md)
+- **live dashboard:** https://memecoin-desk.adaikemmartilda.workers.dev — balance over time, every trade with why in and why out, open trades, near misses with what they did after, the 24h test countdown. read-only, no secrets
 
 ```bash
 node src/run.js 25 --test 24   # local: run 25 min and start a 24h test window
@@ -90,6 +91,6 @@ dexscreener · rugcheck · jupiter quotes · geckoterminal. no paid APIs, no ser
 - [x] day 2: telegram bot, owner lock, alerts, /status, /pause, /set
 - [ ] approve/skip buttons + panic button
 - [x] day 3: quality filter, 3 s exits, near-miss tracker, trade reasons, 24/7 on cloudflare (free)
-- [ ] dashboard
+- [x] live dashboard (public, read-only)
 - [ ] 1-2 weeks of paper trading, judged on 20+ trades
 - [ ] live, only with a small burner wallet. never my main keys.

@@ -20,8 +20,9 @@ import { createTelegramClient } from '../telegram/client.js';
 import { classify, PRIVATE_TEXT, SUBSCRIBER_TEXT } from '../telegram/lock.js';
 import { runCommand } from '../telegram/commands.js';
 import * as alert from '../telegram/alerts.js';
+import { dashData, dashPage } from './dashboard.js';
 
-const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events'];
+const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events', 'curve'];
 const json = (x, status = 200) => new Response(JSON.stringify(x, null, 1), { status, headers: { 'content-type': 'application/json' } });
 const log = {
   event: (type, data, line) => { if (line && type !== 'kill' && type !== 'alive') console.log(line); },
@@ -123,6 +124,7 @@ export class Desk extends DurableObject {
     }
     if (url.pathname === '/tg') { await this.onTelegram(await req.json()); return new Response('ok'); }
     if (url.pathname === '/admin/init' && req.method === 'POST') return this.init(await req.json());
+    if (url.pathname === '/dash') return json(dashData(this.S, this.config, this.health()));
     if (url.pathname === '/admin/state') return json({ S: { ...this.S, _dirty: undefined }, outbox: this.outbox.length, sent: this.sentLog || [], config: this.config });
     return json(this.health());
   }
@@ -197,11 +199,12 @@ export default {
       if (!same(req.headers.get('x-admin-key'), env.ADMIN_KEY)) return new Response('no', { status: 401 });
       return stub.fetch('https://desk' + url.pathname, { method: req.method, body: req.method === 'POST' ? await req.text() : undefined });
     }
-    if (url.pathname === '/health' || url.pathname === '/') {
-      const h = await (await stub.fetch('https://desk/health')).json();
-      if (url.pathname === '/health') return json(h);
-      return new Response(page(h), { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    if (url.pathname === '/health') return json(await (await stub.fetch('https://desk/health')).json());
+    if (url.pathname === '/api/dash') {
+      const r = await stub.fetch('https://desk/dash');
+      return new Response(r.body, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } });
     }
+    if (url.pathname === '/' || url.pathname === '/dashboard') return new Response(dashPage(), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' } });
     return new Response('not found', { status: 404 });
   },
   // free plan watchdog: once a minute, make sure the desk's own alarm loop is alive
@@ -210,16 +213,3 @@ export default {
     ctx.waitUntil(stub.fetch('https://desk/kick'));
   },
 };
-
-function page(h) {
-  const ago = h.lastTickAt ? Math.round((Date.now() - Date.parse(h.lastTickAt)) / 1000) : null;
-  const rows = h.openTrades.map((t) => `<li>$${esc(t.symbol)} <b class="${t.chgPct >= 0 ? 'g' : 'r'}">${t.chgPct >= 0 ? '+' : ''}${t.chgPct}%</b></li>`).join('') || '<li>none</li>';
-  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><title>memecoin desk · live</title>
-<style>body{font:16px/1.5 ui-monospace,Menlo,monospace;background:#0b0f14;color:#d7e0ea;max-width:560px;margin:40px auto;padding:0 20px}h1{font-size:20px}.g{color:#3ddc84}.r{color:#ff5c5c}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:${h.live ? '#3ddc84' : '#ff5c5c'};margin-right:8px}small{color:#7a8899}</style>
-<h1><span class=dot></span>memecoin desk · ${h.live ? 'live' : 'offline'} · paper</h1>
-<p>balance <b>$${h.balanceUsd.toFixed(2)}</b> (fake money)<br>last check ${ago == null ? 'never' : ago + 's ago'} · ${h.ticks} ticks<br>scans ${h.scans} · near misses ${h.nearMisses} · closed trades ${h.closedTrades}<br>open trades checked every ${h.exitsCheckedEverySec}s</p>
-<p>open:</p><ul>${rows}</ul>
-${h.test ? `<p>${h.test.hours}h test #${h.test.n}: ${esc(h.test.startedAt.slice(0, 16).replace('T', ' '))} → ${esc(h.test.endsAt.slice(0, 16).replace('T', ' '))} utc</p>` : ''}
-<small>runs on cloudflare workers (free) · durable object alarm loop · not financial advice</small>`;
-}
-const esc = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));

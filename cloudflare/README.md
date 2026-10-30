@@ -27,6 +27,6 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" -d url=http
 curl -s -X POST https://memecoin-desk.<you>.workers.dev/admin/init -H "x-admin-key: $ADMIN_KEY" -d '{"startTestHours":24}'
 ```
 
-`GET /` is a tiny live status page, `GET /health` the same as json. no secrets on either.
+`GET /` is the live dashboard (read-only, refreshes itself), `GET /api/dash` its public json, `GET /health` a short status. no secrets, no chat ids, no controls on any of them.
 
 note: while the webhook is set, the local node desk (`node src/run.js`) can't long-poll telegram. run it without `TELEGRAM_BOT_TOKEN` (alerts go to `logs/alerts.jsonl`) or delete the webhook first.

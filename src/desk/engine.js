@@ -38,6 +38,8 @@ export function initState(S, config) {
   S.timers ||= { nextScan: 0, nextWatch: 0, nextLiq: 0, nextNm: 0, nextMark: 0 };
   S.settings ||= {};
   S.events ||= [];
+  S.curve ||= [];
+  if (!S.curve.length && S.desk.test?.startedAt) S.curve.push({ t: S.desk.test.startedAt, eq: +(S.desk.test.equityAtStart ?? 0).toFixed(3), open: 0 });
   S._dirty = new Set();
   return S;
 }
@@ -86,7 +88,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     if (st.paused) { S.timers.nextScan = now() + config.loop.scanEverySec * 1000; return 'paused'; }
     run.scans++;
     const status = riskStatus(st, config);
-    const sc = await scout({ config, log, scanNo: run.scans });
+    const sc = await scout({ config, log, scanNo: run.scans, between: maybeWatch });
     S.scan = { phase: 'deep', queue: sc.candidates, sum: { scan: run.scans, checked: 0, kills: {}, passed: 0, picks: 0, near: 0, sellFails: 0 } };
     ev('scan', { scan: run.scans, tokensSeen: sc.tokensSeen, inWindow: sc.pairsInWindow, checking: sc.candidates.length },
       `SCAN #${run.scans}  ${sc.tokensSeen} tokens seen · ${sc.pairsInWindow} in window · checking ${sc.candidates.length} · equity $${status.equity.toFixed(2)}`);
@@ -108,9 +110,18 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     return 'deep';
   }
 
+  // keep exits fast while a scan step is busy: watch in between network calls
+  let watching = false;
+  async function maybeWatch() {
+    if (watching || !st.positions.length || now() < S.timers.nextWatch) return;
+    watching = true;
+    try { await watch(); } catch (e) { log.warn(`watch error: ${e.message}`); } finally { watching = false; }
+  }
+
   async function checkCoin(c, sum) {
     run.checks++; sum.checked++;
     const f = await filter(c, { config });
+    await maybeWatch();
     for (const u of f.unknowns) run.unknownCounts[u] = (run.unknownCounts[u] || 0) + 1;
     const bad = f.results.filter((r) => r.status === 'kill' || (r.status === 'unknown' && config.filter.unknownIsKill.includes(r.id)));
     if (!f.alive) {
@@ -133,6 +144,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     if (st.positions.some((p) => p.mint === c.mint)) return;
 
     const hp = await honeypotCheck(c, f.rc, { config });
+    await maybeWatch();
     if (!hp.ok) {
       if (!hp.unknown) { run.honeypotKills++; sum.sellFails++; }
       ev(hp.unknown ? 'no_trade' : 'kill', { mint: c.mint, symbol: c.symbol, why: hp.reason }, `${hp.unknown ? '○ NO TRADE' : '✖ KILL  '} ${sym(c)} sell test: ${hp.reason}`);
@@ -275,13 +287,25 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     for (const [m, t] of Object.entries(st.noReentry)) if (t < now()) delete st.noReentry[m];
   }
 
+  // balance over time for the dashboard: one point every 5 min + one at every trade
+  function curvePoint(force = false) {
+    const last = S.curve[S.curve.length - 1];
+    if (!force && last && now() - last.t < 5 * 60_000) return;
+    S.curve.push({ t: now(), eq: +equity(st).toFixed(3), open: st.positions.length });
+    if (S.curve.length > 2000) S.curve.splice(0, S.curve.length - 2000);
+    dirty('curve');
+  }
+
   // ONE unit of work per call, so a Worker invocation stays small.
   async function tick({ deepPerStep = 4 } = {}) {
     const T = S.timers;
+    const nTrades = st.closed.length + st.positions.length;
+    curvePoint(nTrades !== S._lastTradeCount && S._lastTradeCount != null);
+    S._lastTradeCount = nTrades;
     const tr = testStep();
     if (tr) return { did: tr, nextAt: now() + 1000 };
     let did = 'none';
-    if (st.positions.length && now() >= T.nextWatch) did = await watch();
+    if (st.positions.length && now() >= T.nextWatch) { watching = true; try { did = await watch(); } finally { watching = false; } }
     else if (S.scan.phase === 'deep' && S.scan.queue.length) did = await scanDeep(deepPerStep);
     else if (now() >= T.nextScan) { prune(); did = await scanDiscover(); }
     else if (now() >= T.nextNm) did = await nearMissStep();

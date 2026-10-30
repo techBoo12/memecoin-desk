@@ -66,8 +66,8 @@
       "pump it"
     ],
     "maxCandidatesPerScan": 30,
-    "searchQueriesPerScan": 12,
-    "maxTokenBatches": 8
+    "searchQueriesPerScan": 10,
+    "maxTokenBatches": 6
   },
   "filter": {
     "minLiquidityUsd": 40000,

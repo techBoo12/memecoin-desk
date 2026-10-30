@@ -29,7 +29,7 @@ const log = createLogger(path.join(ROOT, 'logs'));
 const store = createFileStore(path.join(ROOT, 'state'));
 
 // state parts (the same parts the Cloudflare desk keeps in Durable Object storage)
-const PARTS = { desk: 'desk', run: 'run', seen: 'seen', holders: 'holders', nm: 'nearmiss', scan: 'scan', timers: 'timers', events: 'events' };
+const PARTS = { desk: 'desk', run: 'run', seen: 'seen', holders: 'holders', nm: 'nearmiss', scan: 'scan', timers: 'timers', events: 'events', curve: 'curve' };
 const S = {};
 for (const [k, file] of Object.entries(PARTS)) { const v = await store.get(file, null); if (v) S[k] = v; }
 const overrides = await store.get('settings', {});
