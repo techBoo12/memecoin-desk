@@ -76,6 +76,12 @@ Then it re-checks the price at **+15m, +1h, +4h and +24h**. A near miss is "pump
 
 One record per coin per 6 h (later looks just count), so a coin seen every scan isn't counted 30 times. `/nearmiss` in Telegram shows the latest ones and what they did.
 
+## day 3: a full reason on every trade
+
+- **every paper buy** stores and sends its full case: the score and each of its 6 parts, all 8 rule values, all 9 quality checks with the line each had to clear, the sell test (round trip loss, impact, route), the tape, buys vs sells, holders, liquidity vs mcap, and the head of desk's approval.
+- **every paper sell** says why: `stop -6%`, `trailing stop`, `take profit 30% at 2x`, or `emergency: liquidity down 45% since entry`, plus trigger vs fill price and peak gain.
+- Telegram: `/trades` (why in, why out for the latest trades), `/nearmiss`, `/report` (the head of desk's 24h report: trades, win rate, P/L, R, expectancy, near-miss verdict).
+
 ## honest limits (free data)
 
 - **rule 6, past rugs:** only RugCheck's own creator-history flag. A full dev wallet history needs paid/RPC data.

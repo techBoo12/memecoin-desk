@@ -9,7 +9,9 @@
 // ============================================================================
 import { listSettings, showValue } from '../desk/settings.js';
 import { RULE_WORDS } from './alerts.js';
+import { testReportText, nearMissText, tradesText } from '../desk/report.js';
 
+const size = (x) => (typeof x === 'number' ? x : x?.size ?? 0);
 const n = (x, word) => `${x} ${word}${x === 1 ? '' : 's'}`;
 
 const money = (x) => `${x < 0 ? '-' : ''}$${Math.abs(x).toFixed(2)}`;
@@ -22,6 +24,8 @@ export const HELP = `🤖 memecoin desk · paper mode
 /pause  stop new trades (stops still run)
 /resume  back to work
 /report  head of desk report
+/trades  trades + why in, why out
+/nearmiss  coins it almost bought + what they did
 /settings  what you can change
 /set <key> <value>  e.g. /set stop 7
 /help  this list`;
@@ -40,6 +44,8 @@ export function statusText(d) {
     `open trades: ${state.positions.length}`,
     ...open,
     `desk: ${deskWord}`,
+    ...(state.test?.endsAt ? [`🧪 ${state.test.hours}h test${state.test.n > 1 ? ` #${state.test.n}` : ''}: ${Math.max(0, (Date.now() - state.test.startedAt) / 3.6e6).toFixed(1)}h in · report at ${new Date(state.test.endsAt).toISOString().slice(11, 16)} utc`] : []),
+    ...(d.config?.loop?.watchEverySec ? [`exits checked every ${d.config.loop.watchEverySec}s`] : []),
   ].join('\n');
 }
 
@@ -51,9 +57,9 @@ export function reportText(d) {
     `📋 head of desk report · ${state.day}`,
     `balance $${st.equity.toFixed(2)} (started $${state.startBalance.toFixed(2)}) · today ${signed(st.dayPnlPct)}%`,
     '',
-    `this session: ${n(run.scans, 'scan')} · ${n(run.uniqueCoins.size, 'coin')} · ${run.killedCoins.size} killed`,
+    `this session: ${n(run.scans, 'scan')} · ${n(size(run.uniqueCoins), 'coin')} · ${size(run.killedCoins)} killed`,
     `killed by: ${kills}`,
-    `passed all 8 rules: ${run.alive.size} · paper buys: ${run.approved} · no-trade calls: ${run.vetoes}`,
+    `passed all 8 rules: ${size(run.alive)} · paper buys: ${run.approved} · no-trade calls: ${run.vetoes}`,
     '',
     `trades closed: ${s.trades} (${n(s.wins, 'win')}, ${n(s.losses, 'loss').replace('losss', 'losses')})`,
     `realized ${money(s.realizedUsd)} · expectancy ${signed(s.expectancyR)}R per trade`,
@@ -78,7 +84,10 @@ export async function runCommand(text, desk) {
     case '/start':
     case '/help': return HELP;
     case '/status': return statusText(desk.snapshot());
-    case '/report': return reportText(desk.snapshot());
+    case '/report': { const d = desk.snapshot(); return d.S ? testReportText({ S: d.S, config: d.config }) : reportText(d); }
+    case '/trades': { const d = desk.snapshot(); return tradesText(d.state); }
+    case '/nearmiss':
+    case '/nearmisses': { const d = desk.snapshot(); return d.S ? nearMissText(d.S) : 'near-miss tracker runs with the day 3 desk'; }
     case '/settings': return settingsText(desk.snapshot().config);
     case '/pause': {
       if (desk.snapshot().paused) return '⏸ already paused';
