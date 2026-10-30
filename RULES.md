@@ -45,6 +45,19 @@ techBoo's call after day 2: *"it should not ape just any coin. we only gonna be 
 
 Every quality check is recorded with its value and the line it had to clear (`src/desk/quality.js`), so a buy shows exactly why it passed and a skip shows exactly why it was skipped.
 
+## day 3: faster exits
+
+Day 2's CTO had a -6% stop and closed at **-13.9% (-2.31R)**: price was checked every 15 s and the coin dumped between two checks.
+
+| change | was | now | why |
+|---|---|---|---|
+| how often open trades are checked | every 15 s | **every 3 s** (`loop.watchEverySec`, editable 2-30 s) | a stop is only as good as how often you look. 5x faster = 5x less room to gap |
+| price used to trigger | Jupiter sell quote per coin (slow, rate-limited) | **one batched Jupiter price call for all open coins** (`src/desk/watcher.js` `fastPrices`), DexScreener fallback | cheap enough to run every 3 s on free data |
+| price used to FILL | the quote | **a real Jupiter sell quote for our exact tokens**, taken the moment a stop fires | honest P/L: the fill is what we'd really get, and the log shows trigger vs fill vs stop |
+| liquidity pulled | not watched | **emergency exit if liquidity drops 40%+ from entry, or under $15k** (`exits.liqDropExitPct`, `exits.minLiqExitUsd`, checked every 10 s) | a rug pulls the pool first. no reason to wait for the price stop |
+
+Every sell now logs *why* (stop / trailing stop / take profit / emergency), the trigger price and its source, the fill and its source, the slippage vs the stop, and the peak gain before the exit.
+
 ## honest limits (free data)
 
 - **rule 6, past rugs:** only RugCheck's own creator-history flag. A full dev wallet history needs paid/RPC data.
@@ -53,7 +66,7 @@ Every quality check is recorded with its value and the line it had to clear (`sr
 - **holder growth:** measured between our own scans only (needs the desk to have seen the coin before).
 - **smart wallets:** not scored yet.
 - **sell test:** a quote round trip proves a route exists and shows the tax/impact. It can't catch a contract that changes after we buy.
-- **exits are checked every 15 s**, not tick by tick. A real stop can fill worse in a fast dump.
+- **exits are checked every 3 s**, not tick by tick, and the free price API itself lags the chain by a few seconds. A real stop can still fill worse in a fast dump; the log shows exactly how much worse.
 
 ## ideas worth adding later
 
