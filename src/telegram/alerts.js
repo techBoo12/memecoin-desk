@@ -33,7 +33,8 @@ export function vetoWords(reason, symbol) {
   if (/paused/.test(r)) return 'desk is paused by you';
   if (/max \d+ open/.test(r)) return `already holding the max (${r.match(/max (\d+)/)[1]} trades), skipping`;
   const tape = r.match(/5m (-?[\d.]+)%, 1h (-?[\d.]+)%/);
-  if (/falling tape/.test(r)) return `chart is falling${tape ? ` (5m ${tape[1]}%, 1h ${tape[2]}%)` : ''}, waiting for it to turn`;
+  const pct = (x) => `${Number(x) >= 0 ? '+' : ''}${Math.round(Number(x))}%`;
+  if (/falling tape/.test(r)) return `chart is dipping${tape ? ` (5m ${pct(tape[1])}, 1h ${pct(tape[2])})` : ''}, waiting for it to turn`;
   if (/size under/.test(r)) return 'size under $1, not worth the fees';
   return r;
 }
@@ -86,4 +87,8 @@ export function cooldownAlert(config) {
 
 export function onlineAlert({ equity, config, open }) {
   return `🟢 desk online · paper\nbalance $${equity.toFixed(2)} · ${open} open trade${open === 1 ? '' : 's'}\nscanning every ${Math.round(config.loop.scanEverySec / 60)} min`;
+}
+
+export function offlineAlert(open) {
+  return `🔴 desk offline, this run is over\n${open ? `${open} open trade${open === 1 ? '' : 's'} saved, stops resume when it's back` : 'nothing open'}. commands work again when the desk is back`;
 }

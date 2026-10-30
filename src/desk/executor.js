@@ -11,15 +11,13 @@
 import { quote, solPriceUsd } from './honeypot.js';
 import { SOL_MINT } from '../lib/http.js';
 
-let seq = 0;
-
 export function openPaper(state, c, a, hp, size, config) {
   if (config.mode !== 'paper') throw new Error('executor is paper-only');
   const fee = config.risk.paperFeePct / 100;
   const entryPrice = hp.fillPriceUsd;
   const tokens = (size.sizeUsd * (1 - fee)) / entryPrice;
   const pos = {
-    id: `T${String(++seq).padStart(3, '0')}`, mint: c.mint, symbol: c.symbol, url: c.url, decimals: hp.decimals ?? 6,
+    id: `T${String(state.closed.length + state.positions.length + 1).padStart(3, '0')}` /* keeps counting across runs */, mint: c.mint, symbol: c.symbol, url: c.url, decimals: hp.decimals ?? 6,
     entryAt: new Date().toISOString(), entryPrice, sizeUsd: size.sizeUsd, riskUsd: size.riskUsd,
     tokens, tokensOriginal: tokens, realizedUsd: 0, markUsd: size.sizeUsd * (1 - fee), lastPrice: entryPrice,
     stopPrice: entryPrice * (1 - config.risk.stopLossPct / 100), // set BEFORE entry, never lowered

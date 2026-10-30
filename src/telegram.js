@@ -70,7 +70,7 @@ export async function createTelegramBot({ store, desk, config, log, logDir, toke
     const stale = msg.date * 1000 < bootAt - 120_000;
     if (role === 'pair') {
       await pairOwner(store, lock, msg);
-      log.info(`telegram: owner paired (chat ${msg.chat.id})`);
+      log.info('telegram: owner paired, desk locked to her chat');
       await reply(msg.chat.id, `🔒 paired. this desk now answers only you${msg.from?.first_name ? ', ' + msg.from.first_name.toLowerCase() : ''}.\nalerts for every scan, pick and paper trade land here.\n\n${HELP}`);
       return;
     }

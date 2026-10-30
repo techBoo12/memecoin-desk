@@ -193,6 +193,7 @@ async function main() {
   const summary = { ...run, uniqueCoins: run.uniqueCoins.size, killedCoins: run.killedCoins.size, alive: run.alive.size, equity: status.equity, cash: state.cash, open: state.positions, closed: state.closed };
   fs.writeFileSync(path.join(ROOT, 'logs', 'run-summary.json'), JSON.stringify(summary, null, 1));
   bot.notify('report', reportText(desk.snapshot()));
+  bot.notify('offline', alert.offlineAlert(state.positions.length));
   log.event('report', { summary }, `■ DONE  ${run.scans} scans · ${run.uniqueCoins.size} coins · ${run.killedCoins.size} killed · ${run.approved} paper buys · equity $${status.equity.toFixed(2)} · report written`);
   save();
   await bot.stop();
