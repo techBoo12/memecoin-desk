@@ -374,3 +374,9 @@ test('security (pack section 6 red flags): no dependencies, no install scripts, 
   const src = fs.readdirSync(new URL('../src/playbook/', import.meta.url)).map((f) => fs.readFileSync(new URL(`../src/playbook/${f}`, import.meta.url), 'utf8')).join('\n');
   assert.ok(!/sendTransaction|signTransaction|secretKey|privateKey|seed phrase|Keypair/i.test(src), 'the lane reads only: no signing, no sending');
 });
+
+test('isOnCurve: wallets are on the curve, program-derived accounts (pools) are not', async () => {
+  const { isOnCurve } = await import('../src/playbook/solana.js');
+  assert.equal(isOnCurve('Emg2vmFgSg5QQATQkrpKqXCt8cJK28vudZUPTrMsYHom'), true);   // a wallet seen on Oct 31
+  assert.equal(isOnCurve('DBqR1iNBa4fzjXMoCyt4XfEvXLySEdv6VAHNLV3pdXPj'), false);  // a PumpSwap pool (PDA)
+});

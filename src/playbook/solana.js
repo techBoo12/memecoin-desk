@@ -153,3 +153,33 @@ export function directTransfers(tx, wallet, mint) {
   }
   return out;
 }
+
+
+const B58A = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+export function b58decode(str) {
+  let n = 0n;
+  for (const ch of str) { const i = B58A.indexOf(ch); if (i < 0) throw new Error('bad base58'); n = n * 58n + BigInt(i); }
+  const out = [];
+  while (n > 0n) { out.unshift(Number(n & 255n)); n >>= 8n; }
+  for (const ch of str) { if (ch === '1') out.unshift(0); else break; }
+  return Uint8Array.from(out);
+}
+
+// ed25519 on-curve test (no libs). A normal wallet is an on-curve key; an off-curve address is a
+// program-derived account (pool vaults, lockers, vesting, launchpad escrows) that no person signs for.
+const ED_P = 2n ** 255n - 19n;
+const ED_D = (-121665n * modpow(121666n, ED_P - 2n, ED_P)) % ED_P;
+function modpow(b, e, m) { let r = 1n; b = ((b % m) + m) % m; while (e > 0n) { if (e & 1n) r = (r * b) % m; b = (b * b) % m; e >>= 1n; } return r; }
+export function isOnCurve(address) {
+  let bytes;
+  try { bytes = b58decode(address); } catch { return true; }
+  if (bytes.length !== 32) return true;
+  let y = 0n;
+  for (let i = 31; i >= 0; i--) y = (y << 8n) | BigInt(i === 31 ? bytes[i] & 0x7f : bytes[i]);
+  if (y >= ED_P) return false;
+  const y2 = (y * y) % ED_P;
+  const u = (y2 - 1n + ED_P) % ED_P, v = (ED_D * y2 + 1n) % ED_P;
+  const x2 = (u * modpow(v, ED_P - 2n, ED_P)) % ED_P;
+  if (x2 === 0n) return (bytes[31] & 0x80) === 0;
+  return modpow(x2, (ED_P - 1n) / 2n, ED_P) === 1n;
+}

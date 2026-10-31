@@ -112,3 +112,14 @@ dexscreener · rugcheck · jupiter quotes · geckoterminal. no paid APIs, no ser
 - [x] live dashboard (public, read-only)
 - [ ] 1-2 weeks of paper trading, judged on 20+ trades
 - [ ] live, only with a small burner wallet. never my main keys.
+
+
+## day 5: the training pack (insider-exit lane)
+
+A second lane trained on "Building a DeFi degen bot · training pack": it only looks at fresh pump.fun graduates (≤ 10 min after migration), maps the dev's wallet cluster from the chain (funding trail, same slot / same Jito bundle, direct transfers, fresh wallets, shared funders), skips anything where the cluster or top 10 hold too much, and once in, watches the cluster every second and sells the moment the dev or the cluster starts dumping (exits E1-E8). Every token it sees is labelled RUG / PUMP / DIED / FLAT an hour and a day later, so the bot builds its own training data.
+
+- paper only, reads only, no keys. all numbers are the pack's starting guesses (`config.json → playbook`)
+- `/insider` in Telegram: skips by rule, trades, labels, go/no-go for real money
+- full map of the pack to the code, and what isn't buildable for free: [TRAINING_PACK.md](TRAINING_PACK.md)
+- backtest on MELT launches: `backtest/` (results in `backtest/MELT_RESULTS.md`)
+- tests: `npm test` (66)

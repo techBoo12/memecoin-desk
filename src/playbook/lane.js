@@ -104,7 +104,7 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     for (const f of found) {
       if (P.seen[f.pool]) continue;
       P.seen[f.pool] = now();
-      if (now() - f.createdAt > cfg.max_minutes_since_migration * 60_000) continue; // older than the niche window: not ours, not counted
+      if (!Number.isFinite(f.createdAt) || now() - f.createdAt > cfg.max_minutes_since_migration * 60_000) continue; // older than the niche window (or no date): not ours, not counted
       P.queue.push({ ...f, t0: now() }); P.stats.detected++; added++; P.stats.bySource = { ...(P.stats.bySource || {}), [f.src || 'api']: ((P.stats.bySource || {})[f.src || 'api'] || 0) + 1 };
     }
     for (const [k, t] of Object.entries(P.seen)) if (now() - t > 6 * 3.6e6) delete P.seen[k];

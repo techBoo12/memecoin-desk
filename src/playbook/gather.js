@@ -12,7 +12,7 @@
 //   state      mint authorities + Token-2022 extensions, LP burn, reserves, top holders, cluster balances
 // Free-RPC caps (free_data_caps) are stated in every skip reason when they bite.
 // ============================================================================
-import { WSOL, PUMP_PROGRAM, PUMPSWAP_PROGRAM, SYSTEM, BURN_OWNERS, decodePumpSwapPool, keysOf, signerOf, tokenDeltas, funderFromFirstTx, directTransfers } from './solana.js';
+import { WSOL, PUMP_PROGRAM, PUMPSWAP_PROGRAM, SYSTEM, BURN_OWNERS, isOnCurve, decodePumpSwapPool, keysOf, signerOf, tokenDeltas, funderFromFirstTx, directTransfers } from './solana.js';
 import { buildCluster, clusterShare, top10Share } from './cluster.js';
 
 // Jito's 8 tip accounts: a top-level transfer to one of these is a tip, not a "link"
@@ -217,6 +217,10 @@ async function readState(b, io, cfg, exchanges, call, cap) {
   }
   const byOwner = {};
   for (const h of holders || []) if (h.owner) byOwner[h.owner] = (byOwner[h.owner] || 0) + h.amount;
+  // program-held (off-curve owner: other pools, lockers, vesting): nobody signs for it, so not counted in R4, shown apart
+  const onCurve = io.isOnCurve || isOnCurve;
+  const programHeld = Object.entries(byOwner).filter(([o]) => !exclude.has(o) && !onCurve(o));
+  const top10Exclude = new Set([...exclude, ...programHeld.map(([o]) => o)]);
 
   // cluster + its token accounts
   const inp = clusterInput(b);
@@ -245,7 +249,8 @@ async function readState(b, io, cfg, exchanges, call, cap) {
   if (meta?.symbol && (b.symbol === '?' || b.symbol === b.mint.slice(0, 4))) b.symbol = meta.symbol;
   b.result = {
     mintInfo, lpBurnedPct, reserves, priceSol: reserves.sol / (reserves.token / 10 ** (mintInfo.decimals ?? 6)),
-    holders, holdersSource, top10Pct: holders ? top10Share(Object.entries(byOwner).map(([owner, amount]) => ({ owner, amount })), supply, exclude) : null,
+    holders, holdersSource, top10Pct: holders ? top10Share(Object.entries(byOwner).map(([owner, amount]) => ({ owner, amount })), supply, top10Exclude) : null,
+    programHeldPct: holders ? programHeld.reduce((s2, [, a]) => s2 + a, 0) / Number(mintInfo.supply) * 100 : null,
     cluster: C, inp, tokenAccounts: tas, taBal, balances, entryHoldings: balances, clusterBal: Object.values(balances).reduce((s, x) => s + x, 0),
     deployerBal: balances[b.deployer] || 0, clusterPct: clusterShare(balances, C.members, supply, exclude), supply, exclude: [...exclude],
   };

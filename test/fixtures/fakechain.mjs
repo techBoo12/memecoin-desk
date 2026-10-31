@@ -92,6 +92,7 @@ export function makeChain() {
     S.splitTx = { from: ta(A.B1), tx: tx({ slot: 950, at: Date.now(), signer: A.B1, keys: [A.B1, ta(A.B1), ta(A.NEW)], pre: [tb(1, A.B1, S.bal[ta(A.B1)] + amt), tb(2, A.NEW, 0)], post: [tb(1, A.B1, S.bal[ta(A.B1)]), tb(2, A.NEW, amt)] }) };
   };
   const io = {
+    isOnCurve: () => true, // scripted names are not real keys; real pools are off-curve (tested apart)
     rpc, jitoBundleOf: async (sig) => (sig === 'c' ? 'bundle-1' : null), jitoBundleTxs: async () => ['c', 'e1'], jitoTipFloor: async () => 0.00001,
     rugcheck: async () => ({ risks: [], markets: [] }), goplus: async () => ({ mintable: { status: '0' }, freezable: { status: '0' }, closable: { status: '0' }, balance_mutable_authority: { status: '0' } }),
     solPriceUsd: async () => 200,
