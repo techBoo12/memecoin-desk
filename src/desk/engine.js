@@ -20,6 +20,7 @@ import { fastPrices, liquidityNow, liquidityAlarm } from './watcher.js';
 import { newNearMissBook, recordNearMiss, recheckDue } from './nearmiss.js';
 import * as alert from '../telegram/alerts.js';
 import { testReportText } from './report.js';
+import { campaignHead, campaignDay, finalSummaryText } from './campaign.js';
 import { createPlaybookLane, newPlaybookState } from '../playbook/lane.js';
 import { newLabelBook } from '../playbook/labels.js';
 
@@ -292,8 +293,16 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
   function testStep() {
     const t = st.test;
     if (!t?.endsAt || now() < t.endsAt || t.reportSentAt) return null;
-    const text = testReportText({ S, config, now: now() });
+    const head = campaignHead(st);
+    const text = ((head ? head + '\n' : '') + testReportText({ S, config, now: now() })).slice(0, 4000);
     notify('report', text, { force: true });
+    const c = st.campaign, day = campaignDay(st);
+    if (c && day >= c.days && !c.finalSentAt) { // day 14: the pack's go/no-go over the whole run, its own message
+      const fin = finalSummaryText({ S, config, now: now() });
+      notify('report', fin, { force: true });
+      c.finalSentAt = now(); c.final = fin;
+      ev('report', {}, `■ ${c.days}-DAY RUN final check sent`);
+    }
     t.reportSentAt = now();
     st.reports = [...(st.reports || []), { at: now(), n: t.n || 1, text }].slice(-7);
     ev('report', {}, `■ ${t.hours}H REPORT #${t.n || 1} sent`);
@@ -365,7 +374,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
     // her call (Oct 31): stop the running window before its end, keep every trade, write the partial report,
     // and open the next window at once. `text` + `sentAt` = the report already went out (sent just before a deploy);
     // without them the report is written now and queued for telegram. expectN guards against a double call.
-    endTestEarly({ hours, reason = 'stopped early at the owner\'s request', stoppedAt, text, sentAt, expectN } = {}) {
+    endTestEarly({ hours, reason = 'stopped early at the owner\'s request', stoppedAt, text, sentAt, expectN, campaignDays } = {}) {
       const t = st.test;
       if (!t) return { ok: false, why: 'no test window running' };
       if (expectN != null && (t.n || 1) !== expectN) return { ok: false, why: `window is #${t.n || 1}, not #${expectN}` };
@@ -381,6 +390,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
       ev('report', {}, `■ ${t.hours}H REPORT #${t.n || 1} (stopped early after ${ranH.toFixed(1)}h)`);
       const h = hours || t.hours || 24;
       st.test = { startedAt: now(), endsAt: now() + h * 3.6e6, hours: h, n: (t.n || 1) + 1, equityAtStart: equity(st), closedAtStart: st.closed.length, reportSentAt: null };
+      if (campaignDays) st.campaign = { startedAt: st.test.startedAt, days: campaignDays, firstN: st.test.n, windowHours: h, finalAt: st.test.startedAt + campaignDays * h * 3.6e6, finalSentAt: null, why: 'training pack 9.4: 14+ days of paper before any real money' };
       S.run = newRun(); Object.assign(run, S.run); S.run = run;
       dirty('desk', 'run');
       return { ok: true, report: st.reports[st.reports.length - 1], test: st.test };

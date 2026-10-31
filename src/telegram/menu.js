@@ -46,6 +46,7 @@ export function homeView(d, now = Date.now()) {
     `📂 open  <b>${open}</b> position${open === 1 ? '' : 's'}`,
     `🤖 desk  ${status}`,
     `⚡ auto-buy  <b>${auto ? 'on' : 'off'}</b>`,
+    ...(state.campaign && t ? [`📅 day <b>${(t.n || 1) - state.campaign.firstN + 1}</b> of ${state.campaign.days} · paper run`] : []),
     ...(t?.endsAt ? [`🧪 ${t.hours}h window${t.n > 1 ? ` #${t.n}` : ''} · ${Math.max(0, (now - t.startedAt) / 3.6e6).toFixed(1)}h in`] : []),
     LINE,
     '<i>tap a button, or paste a coin address to buy</i>',

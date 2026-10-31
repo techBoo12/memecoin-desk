@@ -43,3 +43,37 @@ test('endTestEarly with a report already sent does not send twice, and refuses a
   assert.equal(again.ok, false);
   assert.equal(S.desk.test.n, 2);
 });
+
+import { finalSummaryText, campaignDay } from '../src/desk/campaign.js';
+
+test('14-day run: every 24h report says day N of 14, day 14 adds the go/no-go, then it keeps going', async () => {
+  let clock = Date.parse('2026-10-31T06:30:00Z');
+  const config = structuredClone(CONFIG);
+  const S = {}; const sent = [];
+  const engine = createEngine({ config, S, now: () => clock, log: { event() {}, warn() {}, info() {} }, notify: (k, t) => { sent.push({ k, t }); return true; } });
+  engine.startTest(24);
+  const r = engine.endTestEarly({ expectN: 1, campaignDays: 14 });
+  assert.equal(r.ok, true);
+  assert.equal(S.desk.campaign.firstN, 2);
+  assert.equal(S.desk.campaign.finalAt - S.desk.campaign.startedAt, 14 * 86.4e6);
+  sent.length = 0;
+  for (let day = 1; day <= 15; day++) {
+    clock += 24 * 3.6e6 + 1000;
+    S.desk.closed.push({ id: 'T' + day, mint: 'M' + day, symbol: 'C' + day, entryAt: new Date(clock - 3.6e6).toISOString(), exitAt: new Date(clock - 1800e3).toISOString(), sizeUsd: 10, pnlUsd: day % 2 ? 1 : -0.5, pnlPct: day % 2 ? 10 : -5, R: day % 2 ? 1 : -0.5, score: 85, exitReason: 'tp' });
+    const out = await engine.tick();
+    assert.equal(out.did, 'report', 'day ' + day);
+    const reports = sent.filter((x) => x.k === 'report');
+    if (day <= 14) assert.match(reports[0].t, new RegExp(`^📅 day ${day} of 14`));
+    else assert.match(reports[0].t, /^📅 day 15 · past the 14-day run/);
+    if (day === 14) {
+      assert.equal(reports.length, 2, 'day 14 sends the final check as its own message');
+      assert.match(reports[1].t, /14-day paper run · final check/);
+      assert.match(reports[1].t, /❌ 14\+ days and 100\+ closed paper trades · 14 days, 14 trades/);
+      assert.match(reports[1].t, /win rate >= 35% · 50%/);
+      assert.match(reports[1].t, /verdict: NO-GO/);
+    } else assert.equal(reports.length, 1);
+    sent.length = 0;
+  }
+  assert.ok(S.desk.campaign.finalSentAt);
+  assert.equal(S.desk.test.n, 17, 'still rolling 24h windows after day 14');
+});

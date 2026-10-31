@@ -47,6 +47,7 @@ export function statusText(d) {
     `open trades: ${state.positions.length}`,
     ...open,
     `desk: ${deskWord}`,
+    ...(state.campaign && state.test ? [`📅 day ${(state.test.n || 1) - state.campaign.firstN + 1} of ${state.campaign.days} (paper run, go/no-go at day ${state.campaign.days})`] : []),
     ...(state.test?.endsAt ? [`🧪 ${state.test.hours}h test${state.test.n > 1 ? ` #${state.test.n}` : ''}: ${Math.max(0, (Date.now() - state.test.startedAt) / 3.6e6).toFixed(1)}h in · report at ${new Date(state.test.endsAt).toISOString().slice(11, 16)} utc`] : []),
     ...(d.config?.loop?.watchEverySec ? [`exits checked every ${d.config.loop.watchEverySec}s`] : []),
   ].join('\n');

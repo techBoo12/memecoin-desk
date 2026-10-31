@@ -160,15 +160,17 @@ export class Desk extends DurableObject {
   }
 
   // her call: end the running window early (report kept), start the next one now, one telegram note
-  async endTest({ hours = 24, stoppedAt, text, sentAt, expectN, announce, where = 'cloudflare' }) {
-    const r = this.engine.endTestEarly({ hours, stoppedAt, text, sentAt, expectN });
+  async endTest({ hours = 24, stoppedAt, text, sentAt, expectN, announce, campaignDays, where = 'cloudflare' }) {
+    const r = this.engine.endTestEarly({ hours, stoppedAt, text, sentAt, expectN, campaignDays });
     if (!r.ok) return json(r, 409);
-    const t = r.test;
-    this.notify('test', [announce, alert.testStartAlert({ equity: equity(this.S.desk), config: this.config, hours: t.hours, where, endsAt: t.endsAt })].filter(Boolean).join('\n\n').slice(0, 4000));
+    const t = r.test, c = this.S.desk.campaign;
+    const start = alert.testStartAlert({ equity: equity(this.S.desk), config: this.config, hours: t.hours, where, endsAt: t.endsAt }).split('\n');
+    if (campaignDays && c) start.splice(0, 2, `🚀 ${c.days}-day paper run started on ${where}`, `balance $${equity(this.S.desk).toFixed(2)} · report every ${t.hours}h (day 1 report ${new Date(t.endsAt).toISOString().slice(0, 16).replace('T', ' ')} utc) · day ${c.days} go/no-go ${new Date(c.finalAt).toISOString().slice(0, 16).replace('T', ' ')} utc`);
+    this.notify('test', [announce, start.join('\n')].filter(Boolean).join('\n\n').slice(0, 4000));
     this.S.timers.nextScan = 0; this.S.timers.nextWatch = 0;
     await this.save(true);
     await this.ctx.storage.setAlarm(Date.now() + 500);
-    return json({ ok: true, report: { n: r.report.n, at: new Date(r.report.at).toISOString(), early: true, hoursRun: r.report.hoursRun }, test: { ...t, startedAt: new Date(t.startedAt).toISOString(), endsAt: new Date(t.endsAt).toISOString() } });
+    return json({ ok: true, report: { n: r.report.n, at: new Date(r.report.at).toISOString(), early: true, hoursRun: r.report.hoursRun }, test: { ...t, startedAt: new Date(t.startedAt).toISOString(), endsAt: new Date(t.endsAt).toISOString() }, campaign: c ? { ...c, startedAt: new Date(c.startedAt).toISOString(), finalAt: new Date(c.finalAt).toISOString() } : null });
   }
 
   async reply(chatId, text) {
