@@ -29,6 +29,7 @@ paste a coin address  safety check + paper buy buttons
 /trades  trades + why in, why out
 /nearmiss  coins it almost bought + what they did
 /insider  the insider-exit lane (training pack): skips, trades, labels, go/no-go
+/hype  the hype lane: trending coins watchlist, its own paper trades
 /settings  what you can change
 /set <key> <value>  e.g. /set stop 7
 /help  this list`;
@@ -92,6 +93,7 @@ export async function runCommand(text, desk) {
     case '/trades': { const d = desk.snapshot(); return tradesText(d.state); }
     case '/nearmiss':
     case '/nearmisses': { const d = desk.snapshot(); return d.S ? nearMissText(d.S) : 'near-miss tracker runs with the day 3 desk'; }
+    case '/hype': { const d = desk.snapshot(); return d.S?.hypeLines ? hypeText(d.S) : 'the hype lane is off'; }
     case '/insider': { const d = desk.snapshot(); return d.S?.pbLines ? insiderText(d.S) : 'the insider-exit lane is off'; }
     case '/settings': return settingsText(desk.snapshot().config);
     case '/pause': {
@@ -119,4 +121,12 @@ export async function runCommand(text, desk) {
 export function insiderText(S, { limit = 8 } = {}) {
   const recent = (S.pb?.recent || []).slice(0, limit).map((x) => `• $${x.sym} ${x.d === 'skip' ? `skip ${x.code}` : x.d} · ${String(x.note).slice(0, 90)}`);
   return [...S.pbLines(), '', ...(recent.length ? ['latest:', ...recent] : ['nothing seen yet']), '', 'paper only · numbers are starting guesses to tune'].join('\n').slice(0, 4000);
+}
+
+// day 6: the hype lane (trend-matched coins, own paper book, not in the 14-day numbers)
+export function hypeText(S, { limit = 6 } = {}) {
+  const H = S.hype || {};
+  const hot = (H.watch?.items || []).slice(0, 5).map((x) => `• $${x.symbol} ${x.score}${x.bigName ? ' 👑' : ''}${x.early ? ' 🌱early' : ''} · ${String(x.why?.[0] || '').slice(0, 80)}`);
+  const recent = (H.recent || []).slice(0, limit).map((x) => `• $${x.sym} ${x.d === 'skip' ? `skip ${x.code}` : x.d} · ${String(x.note).slice(0, 90)}`);
+  return [...S.hypeLines(), '', ...(hot.length ? ['watchlist:', ...hot] : ['watchlist empty']), '', ...(recent.length ? ['latest:', ...recent] : []), '', 'paper only · 👑 = big-name exception candidate · numbers are starting guesses'].join('\n').slice(0, 4000);
 }

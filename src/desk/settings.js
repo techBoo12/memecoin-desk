@@ -35,6 +35,11 @@ export const SETTINGS = {
   pbtrail:     { path: 'playbook.trailing_stop_pct', min: 10, max: 50, unit: '%', label: 'insider lane: trailing stop below peak (E6)' },
   pbhold:      { path: 'playbook.max_hold_minutes', min: 10, max: 240, int: true, unit: 'm', label: 'insider lane: max hold (E8)' },
   pbsize:      { path: 'playbook.max_position_pct', min: 0.5, max: 5, unit: '%', label: 'insider lane: size, % of equity' },
+  // day 6: Meteora discovery for the desk + the hype lane
+  meteora:     { path: 'scout.meteora', bool: true, label: 'desk also scans Meteora pairs ($TRUMP-style launches) on/off' },
+  hypeon:      { path: 'hype.enabled', bool: true, label: 'hype lane (trend-matched coins, own paper book) on/off' },
+  hypebig:     { path: 'hype.big_name.enabled', bool: true, label: 'hype lane: big-name exception (huge coin, team holds a lot, quarter size) on/off' },
+  hypesize:    { path: 'hype.position_usd', min: 1, max: 20, unit: '$', label: 'hype lane: paper size per trade' },
   alerts:      { path: 'telegram.alertLevel', choices: ['all', 'trades'], label: 'alerts: all, or trades only (no scan digests / picks)' },
 };
 // mode is deliberately missing: paper stays paper.

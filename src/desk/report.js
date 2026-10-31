@@ -59,6 +59,7 @@ export function testReportText({ S, config, now = Date.now() }) {
     '',
     w.n < 20 ? `${w.n} trade${w.n === 1 ? '' : 's'} is too few to judge the system. 20+ before any verdict` : '20+ trades: the numbers start to mean something',
     ...(S.pbLines ? ['', ...S.pbLines()] : []),
+    ...(S.hypeLines ? ['', ...S.hypeLines()] : []), // day 6: hype lane, own book, separate from the numbers above
     `rule #1: ${config.topRule}`,
   ].filter((x, i, a) => !(x === '' && a[i - 1] === '')).join('\n').slice(0, 4000);
 }

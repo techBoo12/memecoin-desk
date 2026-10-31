@@ -25,8 +25,9 @@ import { classify, PRIVATE_TEXT, SUBSCRIBER_TEXT } from '../telegram/lock.js';
 import { runCommand } from '../telegram/commands.js';
 import * as alert from '../telegram/alerts.js';
 import { dashData, dashPage } from './dashboard.js';
+import { createHypeLane } from '../hype/lane.js';
 
-const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events', 'curve', 'pb', 'labels']; // day 5: + insider lane + label book
+const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events', 'curve', 'pb', 'labels', 'hype']; // day 5: + insider lane + label book; day 6: + hype lane
 const json = (x, status = 200) => new Response(JSON.stringify(x, null, 1), { status, headers: { 'content-type': 'application/json' } });
 const log = {
   event: (type, data, line) => { if (line && type !== 'kill' && type !== 'alive') console.log(line); },
@@ -55,9 +56,18 @@ export class Desk extends DurableObject {
     const kr = this.config.playbook?.keyed_rpc || {};
     setKeyedRpc(this.env.HELIUS_RPC_URL, { dailyCap: kr.daily_cap, softPct: kr.soft_pct }); // secret; the lane's free list stays as fallback
     this.engine = createEngine({ config: this.config, S: this.S, log, notify: (k, t, o) => this.notify(k, t, o) });
+    this.makeHype();
     this.client = this.env.TELEGRAM_BOT_TOKEN ? createTelegramClient({ token: this.env.TELEGRAM_BOT_TOKEN, timeoutMs: 8000, apiBase: this.env.TG_API_BASE }) : null;
     this.lock = { ownerChatId: this.env.OWNER_CHAT_ID ? Number(this.env.OWNER_CHAT_ID) : null };
     this.lastTimersSave = 0;
+  }
+
+  // day 6: the hype lane (own paper book, lane=hype). Its watchlist arrives from the off-worker scanner via /admin/hype.
+  // bound to this.S, so it is rebuilt whenever this.S is (load, init)
+  makeHype() {
+    const S = this.S;
+    this.hype = this.config.hype ? createHypeLane({ config: this.config, S, log: (l) => console.log(l), notify: (k, t, o) => this.notify(k, t, o), dirty: (k) => S._dirty?.add(k) }) : null;
+    if (this.hype) Object.defineProperty(S, 'hypeLines', { value: () => this.hype.lines(), enumerable: false, configurable: true });
   }
 
   notify(kind, text, { dedupeKey, dedupeMs = 30 * 60_000 } = {}) {
@@ -112,13 +122,18 @@ export class Desk extends DurableObject {
       console.log('tick error: ' + (e?.message || e));
       r = { did: 'error', nextAt: Date.now() + 5000 };
     }
+    let hypeNext = Infinity;
+    if (this.hype) {
+      try { if (this.hype.due()) this.S.timers.lastHype = await this.hype.step(); hypeNext = this.hype.nextAt(); }
+      catch (e) { console.log('hype step error: ' + (e?.message || e)); hypeNext = Date.now() + 30_000; }
+    }
     this.S.timers.lastTickAt = Date.now();
     this.S.timers.lastDid = r.did;
     this.S.timers.lastTickMs = Date.now() - t0;
     this.S.timers.ticks = (this.S.timers.ticks || 0) + 1;
     await this.flush(this.S.desk.positions.length ? 2 : 4);
     await this.save();
-    const next = Math.min(Math.max(r.nextAt, Date.now() + 1000), Date.now() + 60_000);
+    const next = Math.min(Math.max(Math.min(r.nextAt, hypeNext), Date.now() + 1000), Date.now() + 60_000);
     await this.ctx.storage.setAlarm(next);
   }
 
@@ -134,6 +149,12 @@ export class Desk extends DurableObject {
     if (url.pathname === '/admin/init' && req.method === 'POST') return this.init(await req.json());
     if (url.pathname === '/admin/endtest' && req.method === 'POST') return this.endTest(await req.json());
     if (url.pathname === '/admin/campaign' && req.method === 'POST') { const b = await req.json(); const r = this.engine.startCampaign(b); if (r.ok) await this.save(true); return json(r, r.ok ? 200 : 409); }
+    if (url.pathname === '/admin/hype' && req.method === 'POST') { // day 6: the off-worker hype scanner's watchlist (admin key checked in the outer fetch)
+      if (!this.hype) return json({ ok: false, error: 'hype lane not configured' }, 409);
+      let body; try { body = await req.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+      const r = this.hype.setWatch(body); if (r.ok) await this.save(); return json(r, r.ok ? 200 : 400);
+    }
+    if (url.pathname === '/admin/hype') return json({ lines: this.S.hypeLines ? this.S.hypeLines() : [], hype: this.S.hype || null });
     if (url.pathname === '/dash') return json(dashData(this.S, this.config, this.health()));
     if (url.pathname === '/admin/state') return json({ S: { ...this.S, _dirty: undefined }, outbox: this.outbox.length, sent: this.sentLog || [], config: this.config });
     return json(this.health());
@@ -154,7 +175,7 @@ export class Desk extends DurableObject {
   }
 
   async init({ desk, startTestHours = 24, where = 'cloudflare' }) {
-    if (desk) { this.S = { desk }; this.engine = createEngine({ config: this.config, S: this.S, log, notify: (k, t, o) => this.notify(k, t, o) }); }
+    if (desk) { const keepHype = this.S?.hype; this.S = { desk }; this.engine = createEngine({ config: this.config, S: this.S, log, notify: (k, t, o) => this.notify(k, t, o) }); if (keepHype) this.S.hype = keepHype; this.makeHype(); }
     const t = this.engine.startTest(startTestHours);
     this.S.timers.nextScan = 0; this.S.timers.nextWatch = 0;
     this.notify('test', alert.testStartAlert({ equity: equity(this.S.desk), config: this.config, hours: startTestHours, where, endsAt: t.endsAt }));

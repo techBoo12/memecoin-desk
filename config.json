@@ -67,7 +67,9 @@
     ],
     "maxCandidatesPerScan": 30,
     "searchQueriesPerScan": 10,
-    "maxTokenBatches": 6
+    "maxTokenBatches": 6,
+    "meteora": false,
+    "_meteora_note": "day 6: also look at Meteora pairs (DLMM / DAMM v2, where $TRUMP launched) via DexScreener search, zero Helius calls. Off by default so the running 14-day test keeps the same coin universe; /set meteora on flips it."
   },
   "filter": {
     "minLiquidityUsd": 40000,
@@ -227,5 +229,54 @@
       "ownerLookups": 10
     },
     "migration_account": "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg"
+  },
+  "hype": {
+    "_note": "day 6 hype lane (paper, own $100 book, lane=hype, NOT in the 14-day numbers). Watchlist comes from hype/hype_scanner.py (off-worker) via POST /admin/hype. Every number here is a STARTING GUESS to tune by paper trading.",
+    "enabled": true,
+    "mode": "paper",
+    "starting_balance_usd": 100,
+    "watch_max_age_min": 30,
+    "min_score": 45,
+    "recheck_after_min": 30,
+    "check_every_s": 60,
+    "monitor_every_s": 10,
+    "max_open": 3,
+    "position_usd": 5,
+    "min_liquidity_usd": 30000,
+    "min_volume_1h_usd": 20000,
+    "max_top10_pct": 35,
+    "max_insider_pct": 20,
+    "max_dev_pct": 5,
+    "min_lp_locked_pct": 90,
+    "lp_burned_by_protocol_dexes": [
+      "pumpswap"
+    ],
+    "max_round_trip_loss_pct": 10,
+    "stop_loss_pct": 25,
+    "trail_activate_pct": 40,
+    "trail_distance_pct": 25,
+    "tp_ladder": [
+      {
+        "atMultiple": 2,
+        "sellPct": 30
+      },
+      {
+        "atMultiple": 5,
+        "sellPct": 30
+      }
+    ],
+    "max_hold_hours": 48,
+    "liq_drop_exit_pct": 50,
+    "big_name": {
+      "_note": "$TRUMP rule: team held ~80% (locked/vesting), so the normal holder caps would skip it. High hype AND huge real trading may pass with these caps at a quarter size. Logged as BIG-NAME EXCEPTION every time.",
+      "enabled": true,
+      "min_score": 60,
+      "min_volume_1h_usd": 1000000,
+      "min_liquidity_usd": 500000,
+      "max_top10_pct": 90,
+      "max_insider_pct": 90,
+      "max_dev_pct": 90,
+      "size_frac": 0.25
+    }
   }
 }
