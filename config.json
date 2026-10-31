@@ -153,5 +153,73 @@
     "watchEverySec": 3,
     "runMinutes": 25,
     "testHours": 24
+  },
+  "playbook": {
+    "_note": "training pack section 9 (insider-exit lane). # STARTING GUESSES: TUNE VIA PAPER TRADING. These are not tested values. (pack 9.3, word for word). Extras below _extras_note are ours, also guesses.",
+    "enabled": true,
+    "mode": "paper",
+    "max_minutes_since_migration": 10,
+    "early_buyer_slots": 3,
+    "funding_trace_hops": 2,
+    "fresh_wallet_max_age_min": 60,
+    "max_cluster_share_pct": 20,
+    "max_top10_pct": 30,
+    "min_liquidity_usd": 15000,
+    "min_lp_burned_or_locked_pct": 95,
+    "max_sim_roundtrip_loss_pct": 15,
+    "cluster_sell_trigger_pct": 20,
+    "cluster_drop_pct": 15,
+    "cluster_drop_window_s": 60,
+    "tp_ladder": [
+      {
+        "at_x": 2.0,
+        "sell_pct": 30
+      },
+      {
+        "at_x": 3.0,
+        "sell_pct": 30
+      }
+    ],
+    "trailing_stop_pct": 25,
+    "max_hold_minutes": 60,
+    "max_position_pct": 2,
+    "max_pool_impact_pct": 1,
+    "max_open_positions": 3,
+    "max_daily_loss_pct": 6,
+    "max_slippage_bps": 300,
+    "max_exit_slippage_bps": 1500,
+    "max_priority_fee": 0.002,
+    "max_latency_ms": 1500,
+    "_extras_note": "ours, not from 9.3 (guesses): how often to look, free-RPC caps, cost model for pessimistic paper fills (9.4), exchange links (9.1 E).",
+    "monitor_every_s": 1,
+    "discover_every_s": 30,
+    "sim_test_usd": 2,
+    "est_compute_units": 150000,
+    "paper_sandwich_haircut_bps": 50,
+    "exchange_link_amount_tol_pct": 5,
+    "exchange_link_window_min": 10,
+    "shared_funder_min_group": 3,
+    "hub_span_hours": 6,
+    "exchange_wallets": [],
+    "known_rugger_block": true,
+    "copycat_block_minutes": 60,
+    "kelly_fraction": 0.25,
+    "kelly_min_trades": 30,
+    "pump_total_supply_raw": 1000000000000000.0,
+    "label_checks_min": [
+      5,
+      15,
+      30,
+      60,
+      1440
+    ],
+    "free_data_caps": {
+      "sigPages": 10,
+      "earlyTx": 40,
+      "wallets": 30,
+      "hop2": 12,
+      "links": 16,
+      "ownerLookups": 10
+    }
   }
 }

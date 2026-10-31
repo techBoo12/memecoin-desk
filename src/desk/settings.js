@@ -28,6 +28,13 @@ export const SETTINGS = {
   tp:          { path: 'risk.takeProfitLadder.0.atMultiple', min: 1.2, max: 10, unit: 'x', label: 'first take profit at (x entry)' },
   slippage:    { path: 'honeypot.slippageBps', scale: 100, min: 0.5, max: 10, unit: '%', label: 'max slippage on quotes + paper fills' },
   autobuy:     { path: 'autoBuy', bool: true, label: 'auto-buy: the desk buys its own picks on/off' },
+  // day 5: the training pack's insider-exit lane (numbers are the pack's starting guesses)
+  pbon:        { path: 'playbook.enabled', bool: true, label: 'insider-exit lane (training pack) on/off' },
+  pbcluster:   { path: 'playbook.max_cluster_share_pct', min: 5, max: 50, unit: '%', label: 'insider lane: max dev-cluster share to enter (R5)' },
+  pbsell:      { path: 'playbook.cluster_sell_trigger_pct', min: 5, max: 50, unit: '%', label: 'insider lane: exit when the cluster sold this much (E4)' },
+  pbtrail:     { path: 'playbook.trailing_stop_pct', min: 10, max: 50, unit: '%', label: 'insider lane: trailing stop below peak (E6)' },
+  pbhold:      { path: 'playbook.max_hold_minutes', min: 10, max: 240, int: true, unit: 'm', label: 'insider lane: max hold (E8)' },
+  pbsize:      { path: 'playbook.max_position_pct', min: 0.5, max: 5, unit: '%', label: 'insider lane: size, % of equity' },
   alerts:      { path: 'telegram.alertLevel', choices: ['all', 'trades'], label: 'alerts: all, or trades only (no scan digests / picks)' },
 };
 // mode is deliberately missing: paper stays paper.

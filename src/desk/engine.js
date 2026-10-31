@@ -20,6 +20,8 @@ import { fastPrices, liquidityNow, liquidityAlarm } from './watcher.js';
 import { newNearMissBook, recordNearMiss, recheckDue } from './nearmiss.js';
 import * as alert from '../telegram/alerts.js';
 import { testReportText } from './report.js';
+import { createPlaybookLane, newPlaybookState } from '../playbook/lane.js';
+import { newLabelBook } from '../playbook/labels.js';
 
 export function newRun() {
   return { since: Date.now(), scans: 0, checks: 0, uniqueCoins: 0, killedCoins: 0, alive: 0, killsByRule: {}, allHitsByRule: {},
@@ -39,6 +41,7 @@ export function initState(S, config) {
   S.settings ||= {};
   S.events ||= [];
   S.curve ||= [];
+  if (config.playbook) { S.pb ||= newPlaybookState(); S.labels ||= newLabelBook(); } // day 5: training pack lane
   if (!S.curve.length && S.desk.test?.startedAt) S.curve.push({ t: S.desk.test.startedAt, eq: +(S.desk.test.equityAtStart ?? 0).toFixed(3), open: 0 });
   S._dirty = new Set();
   return S;
@@ -48,7 +51,7 @@ const pad = (s, n) => String(s).padEnd(n).slice(0, n);
 const sym = (c) => pad('$' + c.symbol, 11);
 const sp = (x) => (x >= 1 ? x.toFixed(4) : x.toPrecision(4));
 
-export function createEngine({ config, S, log, notify, now = () => Date.now() }) {
+export function createEngine({ config, S, log, notify, now = () => Date.now(), pbIo } = {}) {
   initState(S, config);
   const st = S.desk;
   const run = S.run;
@@ -57,6 +60,9 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     log.event(type, data, line);
     if (line) { S.events.push(`${new Date(now()).toISOString().slice(11, 19)} ${line}`); if (S.events.length > 200) S.events.splice(0, S.events.length - 200); dirty('events'); }
   };
+
+  // day 5: the training pack's insider-exit lane (src/playbook). Own positions (strategy 'insider'), own exits E1-E8.
+  const pb = config.playbook ? createPlaybookLane({ config, S, now, ev, notify, dirty, ...(pbIo ? { io: pbIo } : {}) }) : null;
 
   function markSeen(c, flag) {
     const s = S.seen[c.mint];
@@ -223,12 +229,14 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
   // ---------- fast exit watch (every watchEverySec while anything is open)
   async function watch() {
     S.timers.nextWatch = now() + config.loop.watchEverySec * 1000;
-    if (!st.positions.length) return 'idle';
-    const mints = st.positions.map((p) => p.mint);
+    const deskPos = st.positions.filter((p) => p.strategy !== 'insider'); // insider positions have their own 1s monitor + E1-E8
+    if (!deskPos.length) return 'idle';
+    const mints = deskPos.map((p) => p.mint);
     const prices = await fastPrices(mints);
     let liq = null;
     if (now() >= S.timers.nextLiq) { S.timers.nextLiq = now() + (config.exits?.liqCheckEverySec || 10) * 1000; liq = await liquidityNow(mints); }
-    for (const pos of [...st.positions]) {
+    for (const pos of [...deskPos]) {
+      if (!st.positions.includes(pos)) continue;
       const px = prices.get(pos.mint);
       const lq = liq?.get(pos.mint);
       if (lq) pos.liqNow = lq.liq;
@@ -314,7 +322,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
   }
 
   // ONE unit of work per call, so a Worker invocation stays small.
-  async function tick({ deepPerStep = 4 } = {}) {
+  async function tick({ deepPerStep = 4, monitorBurst = 1, pbBudget = 8 } = {}) {
     const T = S.timers;
     const nTrades = st.closed.length + st.positions.length;
     curvePoint(nTrades !== S._lastTradeCount && S._lastTradeCount != null);
@@ -322,14 +330,21 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
     const tr = testStep();
     if (tr) return { did: tr, nextAt: now() + 1000 };
     let did = 'none';
-    if (st.positions.length && now() >= T.nextWatch) { watching = true; try { did = await watch(); } finally { watching = false; } }
+    const deskOpen = st.positions.some((p) => p.strategy !== 'insider');
+    const pbOn = pb && config.playbook.enabled !== false && !st.paused;
+    if (pb && pb.monitorDue()) did = await pb.monitor(monitorBurst); // open insider trades first: exits matter most (paused or not)
+    else if (deskOpen && now() >= T.nextWatch) { watching = true; try { did = await watch(); } finally { watching = false; } }
     else if (S.scan.phase === 'deep' && S.scan.queue.length) did = await scanDeep(deepPerStep);
+    else if (pbOn && pb.buildDue()) did = await pb.buildStep(pbBudget);
     else if (now() >= T.nextScan) { prune(); did = await scanDiscover(); }
+    else if (pbOn && pb.discoverDue()) did = await pb.discover();
     else if (now() >= T.nextNm) did = await nearMissStep();
+    else if (pb && pb.labelsDue()) did = await pb.labelsStep();
     else if (S.scan.phase === 'deep') { S.scan.phase = 'idle'; dirty('scan'); }
     const deepPending = S.scan.phase === 'deep' && S.scan.queue.length;
     const nexts = [T.nextScan, T.nextNm, st.test?.endsAt && !st.test.reportSentAt ? st.test.endsAt : Infinity];
-    if (st.positions.length) nexts.push(T.nextWatch);
+    if (deskOpen) nexts.push(T.nextWatch);
+    if (pb) nexts.push(pbOn ? pb.nextAt() : Math.min(pb.monitorDue() ? now() : Infinity, S.pb.timers.nextLabels));
     if (deepPending) nexts.push(now() + 500);
     return { did, nextAt: Math.max(now() + 200, Math.min(...nexts)) };
   }
@@ -337,8 +352,9 @@ export function createEngine({ config, S, log, notify, now = () => Date.now() })
   const todayR = () => st.closed.filter((t) => t.exitAt?.slice(0, 10) === st.day).reduce((a, t) => a + t.R, 0);
   const snapshot = () => ({ st: riskStatus(st, config), state: st, todayR: todayR(), paused: Boolean(st.paused), stats: stats(st), run, config, nm: S.nm, S });
 
+  if (pb) Object.defineProperty(S, 'pbLines', { value: () => pb.reportLines(), enumerable: false, configurable: true });
   return {
-    tick, watch, scanDiscover, scanDeep, nearMissStep, snapshot, S,
+    tick, watch, scanDiscover, pb, scanDeep, nearMissStep, snapshot, S,
     event: (type, line) => ev(type, {}, line), // day 4: manual trades from the button menu land in the same live feed
     startTest(hours = 24) {
       st.test = { startedAt: now(), endsAt: now() + hours * 3.6e6, hours, n: 1, equityAtStart: equity(st), closedAtStart: st.closed.length, reportSentAt: null };

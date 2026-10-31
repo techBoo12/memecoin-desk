@@ -25,7 +25,7 @@ import { runCommand } from '../telegram/commands.js';
 import * as alert from '../telegram/alerts.js';
 import { dashData, dashPage } from './dashboard.js';
 
-const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events', 'curve'];
+const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events', 'curve', 'pb', 'labels']; // day 5: + insider lane + label book
 const json = (x, status = 200) => new Response(JSON.stringify(x, null, 1), { status, headers: { 'content-type': 'application/json' } });
 const log = {
   event: (type, data, line) => { if (line && type !== 'kill' && type !== 'alive') console.log(line); },
@@ -103,7 +103,8 @@ export class Desk extends DurableObject {
     let r;
     const t0 = Date.now();
     try {
-      r = await this.engine.tick({ deepPerStep: this.S.desk.positions.length ? 1 : 3 });
+      // insider trades: 3 looks 1 s apart inside one alarm (pack: monitor >= 1/s) so the free plan sees ~1 request per 3 s, not 1 per s
+      r = await this.engine.tick({ deepPerStep: this.S.desk.positions.length ? 1 : 3, monitorBurst: 3, pbBudget: 8 });
     } catch (e) {
       console.log('tick error: ' + (e?.message || e));
       r = { did: 'error', nextAt: Date.now() + 5000 };

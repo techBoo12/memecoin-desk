@@ -16,10 +16,10 @@ export function review(proposal, status, state, config) {
   if (status.cooldown) return veto(`cooldown after ${config.risk.lossStreakForCooldown} losses in a row (no revenge trades)`);
   if (state.positions.some((p) => p.mint === c.mint)) return veto('already holding it');
   if ((state.noReentry[c.mint] || 0) > Date.now()) return veto('stopped out on this coin recently, no re-entry');
-  if (state.positions.length >= config.risk.maxOpenPositions) return veto(`max ${config.risk.maxOpenPositions} open positions`);
+  if (state.positions.filter((p) => p.strategy !== 'insider').length >= config.risk.maxOpenPositions) return veto(`max ${config.risk.maxOpenPositions} open positions`);
   const cap = config.quality?.maxTradesPerDay;
   const day = new Date().toISOString().slice(0, 10);
-  const today = [...state.positions, ...state.closed].filter((t) => t.source !== 'manual' && String(t.entryAt).slice(0, 10) === day).length; // her manual buys don't eat the bot's daily cap
+  const today = [...state.positions, ...state.closed].filter((t) => t.source !== 'manual' && t.strategy !== 'insider' && String(t.entryAt).slice(0, 10) === day).length; // her manual buys don't eat the bot's daily cap
   if (cap && today >= cap) return veto(`daily trade cap: ${today}/${cap} trades today (quality over quantity)`);
   if (!a.passes) return veto(`score ${a.score} < ${config.analyst.passScore}`);
   if (!a.tapeOk) return veto(`falling tape (5m ${a.tape.m5}%, 1h ${a.tape.h1}%), wait for confirmation`);
@@ -30,8 +30,9 @@ export function review(proposal, status, state, config) {
 
 // the bot's own record. manual trades (her buys from the button menu) are counted apart: stats(state, 'manual')
 export const isManual = (t) => t.source === 'manual';
+export const isInsider = (t) => t.strategy === 'insider'; // day 5: the training pack's lane, counted apart
 export function stats(state, which = 'bot') {
-  const t = state.closed.filter((x) => (which === 'manual' ? isManual(x) : which === 'all' ? true : !isManual(x)));
+  const t = state.closed.filter((x) => (which === 'manual' ? isManual(x) : which === 'insider' ? isInsider(x) : which === 'all' ? true : !isManual(x) && !isInsider(x)));
   const wins = t.filter((x) => x.pnlUsd > 0);
   const losses = t.filter((x) => x.pnlUsd <= 0);
   const avg = (xs, f) => (xs.length ? xs.reduce((s, x) => s + f(x), 0) / xs.length : 0);

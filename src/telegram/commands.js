@@ -28,6 +28,7 @@ paste a coin address  safety check + paper buy buttons
 /report  head of desk report
 /trades  trades + why in, why out
 /nearmiss  coins it almost bought + what they did
+/insider  the insider-exit lane (training pack): skips, trades, labels, go/no-go
 /settings  what you can change
 /set <key> <value>  e.g. /set stop 7
 /help  this list`;
@@ -90,6 +91,7 @@ export async function runCommand(text, desk) {
     case '/trades': { const d = desk.snapshot(); return tradesText(d.state); }
     case '/nearmiss':
     case '/nearmisses': { const d = desk.snapshot(); return d.S ? nearMissText(d.S) : 'near-miss tracker runs with the day 3 desk'; }
+    case '/insider': { const d = desk.snapshot(); return d.S?.pbLines ? insiderText(d.S) : 'the insider-exit lane is off'; }
     case '/settings': return settingsText(desk.snapshot().config);
     case '/pause': {
       if (desk.snapshot().paused) return '⏸ already paused';
@@ -110,4 +112,10 @@ export async function runCommand(text, desk) {
     }
     default: return `don't know ${cmd} 🤔\n\n${HELP}`;
   }
+}
+
+// day 5: the training pack's insider-exit lane at a glance
+export function insiderText(S, { limit = 8 } = {}) {
+  const recent = (S.pb?.recent || []).slice(0, limit).map((x) => `• $${x.sym} ${x.d === 'skip' ? `skip ${x.code}` : x.d} · ${String(x.note).slice(0, 90)}`);
+  return [...S.pbLines(), '', ...(recent.length ? ['latest:', ...recent] : ['nothing seen yet']), '', 'paper only · numbers are starting guesses to tune'].join('\n').slice(0, 4000);
 }
