@@ -1,0 +1,26 @@
+# daily smart-wallet list build for the copy lane (Tab, Oct 31 2026; her OK to push: WhatsApp 8:51 AM Lagos).
+# up to 2,500 Helius credits a run (the --budget cap, webhook update included) (her free plan: 1M a month), ~5 min. Updates her one Helius webhook to the new list.
+# Repo secrets needed: HELIUS_RPC_URL (https://mainnet.helius-rpc.com/?api-key=...), DESK_URL, DESK_ADMIN_KEY.
+# The log is PUBLIC (public repo): it prints wallet addresses + stats (public on-chain data), never a key.
+name: smart wallets (daily)
+on:
+  schedule: [{ cron: "10 5 * * *" }]   # 05:10 UTC = 06:10 Lagos, before the daily report
+  workflow_dispatch: {}
+concurrency: { group: smart-wallets, cancel-in-progress: false }
+permissions: { contents: read }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: build the list, push it to the worker, point the webhook at it
+        env:
+          HELIUS_RPC_URL: ${{ secrets.HELIUS_RPC_URL }}
+          DESK_URL: ${{ secrets.DESK_URL }}
+          DESK_ADMIN_KEY: ${{ secrets.DESK_ADMIN_KEY }}
+        run: |
+          echo "::add-mask::${HELIUS_RPC_URL##*api-key=}"   # mask the bare key too, not only the whole URL
+          mkdir -p state && node tools/smart_wallets.mjs --days 2 --push --hook

@@ -338,7 +338,7 @@ def scan(args):
             "sources": src.health}
 
 def admin_key(args):
-    k = os.environ.get("HYPE_ADMIN_KEY")
+    k = os.environ.get("HYPE_ADMIN_KEY") or os.environ.get("DESK_ADMIN_KEY")
     if k: return k
     for p in (os.path.join(REPO, "state", "cloudflare.json"), os.path.join(REPO, "..", "memecoin-desk", "state", "cloudflare.json")):
         try: return json.load(open(p))["adminKey"]
@@ -347,6 +347,7 @@ def admin_key(args):
 
 def worker_url(args):
     if args.url: return args.url
+    if os.environ.get("DESK_URL"): return os.environ["DESK_URL"]
     for p in (os.path.join(REPO, "state", "cloudflare.json"), os.path.join(REPO, "..", "memecoin-desk", "state", "cloudflare.json")):
         try: return json.load(open(p))["url"]
         except Exception: pass

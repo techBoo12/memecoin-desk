@@ -194,7 +194,8 @@ async function main() {
   fs.writeFileSync(here + 'state/smart_wallets.json', JSON.stringify(out, null, 1));
   for (const s of out.list.slice(0, 15)) log(`  ${short(s.w)} score ${s.score} · win ${(s.winRate * 100).toFixed(0)}% of ${s.closed} · pnl ${s.pnlSol} SOL (${s.roiPct}% on ${s.spentSol} SOL) · ${s.txPerDay} tx/d · last trade ${s.idleH}h ago · hit ${s.winnersHit.join(',')}`);
 
-  const cf = fs.existsSync(here + 'state/cloudflare.json') ? JSON.parse(fs.readFileSync(here + 'state/cloudflare.json', 'utf8')) : null;
+  // env first (GitHub Actions secrets DESK_URL / DESK_ADMIN_KEY), else the gitignored state/cloudflare.json on Tab's box
+  const cf = process.env.DESK_ADMIN_KEY && process.env.DESK_URL ? { adminKey: process.env.DESK_ADMIN_KEY, url: process.env.DESK_URL } : fs.existsSync(here + 'state/cloudflare.json') ? JSON.parse(fs.readFileSync(here + 'state/cloudflare.json', 'utf8')) : null;
   if (arg('hook', false) === true) {
     if (!cf?.adminKey || !cf?.url) throw new Error('state/cloudflare.json missing (url, adminKey)');
     if (!out.list.length) log('no wallets kept: webhook left as it is');
@@ -208,7 +209,7 @@ async function main() {
       const j = await r.json().catch(() => ({}));
       credits += 100; meter.hookMgmt += 100;
       out.hook = { ok: r.ok, id: j.webhookID || mine?.webhookID || null, addresses: out.list.length, action: mine ? 'updated' : 'created', status: r.status };
-      log(`webhook ${out.hook.action}: ${r.ok ? 'ok' : 'FAILED ' + r.status + ' ' + JSON.stringify(j).slice(0, 200)}`);
+      log(`webhook ${out.hook.action}: ${r.ok ? 'ok' : 'FAILED ' + r.status + ' ' + String(j.error || j.message || '').slice(0, 120)}`); // never the body: the log can be public (GitHub Actions)
       fs.writeFileSync(here + 'state/smart_wallets.json', JSON.stringify(out, null, 1));
     }
   }

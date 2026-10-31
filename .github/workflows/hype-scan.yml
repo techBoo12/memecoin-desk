@@ -1,0 +1,25 @@
+# hype scanner, always on (Tab, Oct 31 2026; her OK to push: WhatsApp 8:51 AM Lagos).
+# Public repo = GitHub Actions minutes are free. GitHub runs */5 schedules "best effort": runs can start 5-15 min late
+# and may be skipped at busy times. Scheduled workflows in a public repo pause after 60 days with no repo activity.
+# Repo secrets needed: DESK_URL (https://memecoin-desk.<account>.workers.dev), DESK_ADMIN_KEY (the worker's ADMIN_KEY).
+# The log is PUBLIC (public repo): the scanner prints coins + scores only, never the key.
+name: hype scan
+on:
+  schedule: [{ cron: "*/5 * * * *" }]
+  workflow_dispatch: {}
+concurrency: { group: hype-scan, cancel-in-progress: false }
+permissions: { contents: read }
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install --quiet requests
+      - name: scan + push the watchlist to the worker (/admin/hype)
+        env:
+          DESK_URL: ${{ secrets.DESK_URL }}
+          DESK_ADMIN_KEY: ${{ secrets.DESK_ADMIN_KEY }}
+        run: mkdir -p state && python3 hype/hype_scanner.py --push
