@@ -29,6 +29,8 @@ paste a coin address  safety check + paper buy buttons
 /trades  trades + why in, why out
 /nearmiss  coins it almost bought + what they did
 /insider  the insider-exit lane (training pack): skips, trades, labels, go/no-go
+/alerts on|off  dev-crew alerts (loading / dumping a fresh coin)
+/smart  smart-wallet list + the copy lane's own paper stats
 /settings  what you can change
 /set <key> <value>  e.g. /set stop 7
 /help  this list`;
@@ -93,6 +95,15 @@ export async function runCommand(text, desk) {
     case '/nearmiss':
     case '/nearmisses': { const d = desk.snapshot(); return d.S ? nearMissText(d.S) : 'near-miss tracker runs with the day 3 desk'; }
     case '/insider': { const d = desk.snapshot(); return d.S?.pbLines ? insiderText(d.S) : 'the insider-exit lane is off'; }
+    case '/smart': { const d = desk.snapshot(); return d.S?.copyLines ? smartText(d.S) : 'the copy lane is off'; }
+    case '/alerts': {
+      const d = desk.snapshot();
+      const on = d.config?.playbook?.alerts?.enabled !== false;
+      if (!args.length) return alertsText(d, on);
+      const r = await desk.set('insideralerts', args[0]);
+      if (!r.ok) return `❌ ${r.error.replace('insideralerts', '/alerts')}`;
+      return r.value ? '🚨 insider alerts on. max a few an hour, one per coin per event' : '🔕 insider alerts off. /alerts on to bring them back';
+    }
     case '/settings': return settingsText(desk.snapshot().config);
     case '/pause': {
       if (desk.snapshot().paused) return '⏸ already paused';
@@ -119,4 +130,30 @@ export async function runCommand(text, desk) {
 export function insiderText(S, { limit = 8 } = {}) {
   const recent = (S.pb?.recent || []).slice(0, limit).map((x) => `• $${x.sym} ${x.d === 'skip' ? `skip ${x.code}` : x.d} · ${String(x.note).slice(0, 90)}`);
   return [...S.pbLines(), '', ...(recent.length ? ['latest:', ...recent] : ['nothing seen yet']), '', 'paper only · numbers are starting guesses to tune'].join('\n').slice(0, 4000);
+}
+
+// Oct 31: dev-crew alerts status
+export function alertsText(d, on) {
+  const a = d.S?.pb?.alerts || {}, c = d.config?.playbook?.alerts || {};
+  const lastHour = (a.sent || []).filter((t) => Date.now() - t < 3.6e6).length;
+  return [`🚨 insider alerts: ${on ? 'on' : 'off'}`,
+    `loading: the dev's linked wallets hold ${c.crew_buy_pct ?? 20}%+ of a fresh coin`,
+    `dumping: their share drops ${c.dump_drop_pts ?? 5}+ pts (or ${c.dump_drop_rel_pct ?? 30}%) within ${c.watch_minutes ?? 60} min`,
+    `max ${c.max_per_hour ?? 6} an hour, one per coin per event · sent ${a.n || 0} so far (${lastHour} in the last hour)${a.suppressed ? ` · ${a.suppressed} held back by the hourly cap` : ''}`,
+    `watching ${Object.keys(a.watch || {}).length} crews now`, '', on ? '/alerts off to mute' : '/alerts on to switch on'].join('\n');
+}
+
+// Oct 31: the smart-wallet list + the copy lane's own paper stats
+export function smartText(S, { limit = 10 } = {}) {
+  const sm = S.smart || {}, list = sm.list || [];
+  const rows = list.slice(0, limit).map((x, i) => `${i + 1}. ${x.w.slice(0, 4)}…${x.w.slice(-4)} · win ${Math.round((x.winRate || 0) * 100)}% of ${x.closed} · ${x.pnlSol >= 0 ? '+' : ''}${x.pnlSol} SOL · ${x.txPerDay}/day`);
+  const recent = (S.copy?.recent || []).slice(0, 5).map((x) => `• $${x.sym} ${x.d === 'skip' ? `skip ${x.code}` : x.d} · ${String(x.note).slice(0, 80)}`);
+  return [
+    ...S.copyLines(), '',
+    list.length ? `top ${Math.min(limit, list.length)} of ${list.length} (realized, last ~7 days, from their own on-chain trades):` : 'no list yet (it is built once a day off the worker)',
+    ...rows,
+    ...(sm.winners?.length ? ['', `built from early buyers of: ${sm.winners.slice(0, 6).map((w) => `$${w.symbol} ${w.x}x`).join(', ')}`] : []),
+    ...(recent.length ? ['', 'latest:', ...recent] : []),
+    '', '"smart" = a statistical label from past trades (small sample), not proof of skill or inside info. paper only',
+  ].join('\n').slice(0, 4000);
 }

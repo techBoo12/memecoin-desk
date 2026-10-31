@@ -100,7 +100,7 @@ test('home panel edits in place, shows balance / today / open / status / auto-bu
   const id = await menu.sendHome();
   const home = lastOf(tg.log, 'send');
   assert.match(home.text, /balance\s+<b>\$100\.00<\/b>/); assert.match(home.text, /today/); assert.match(home.text, /open\s+<b>0<\/b>/); assert.match(home.text, /auto-buy\s+<b>on<\/b>/);
-  assert.deepEqual(allData(home.kb), ['b', 'sl', 'p', 'nm', 'rp', 'st', 'pz', 'h']);
+  assert.deepEqual(allData(home.kb), ['b', 'sl', 'p', 'nm', 'rp', 'st', 'ia', 'sw', 'pz', 'h']); // Oct 31: + insider alerts toggle, smart wallets
   await tap('h', { msg: id });
   assert.equal(lastOf(tg.log, 'edit').id, id); // edited, not a new message
   assert.equal(tg.log.filter((x) => x.m === 'send').length, 1);

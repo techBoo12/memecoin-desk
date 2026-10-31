@@ -16,6 +16,7 @@ import { positionView, isMint } from '../desk/manual.js';
 import { stats } from '../desk/head.js';
 import { testReportText, nearMissText } from '../desk/report.js';
 import { usd } from '../desk/filter.js';
+import { smartText } from './commands.js';
 
 export const CHECK_TTL_MS = 10 * 60_000;   // a check card's prices are trusted for 10 min, then it re-checks
 export const AMOUNTS = [5, 10, 25];
@@ -56,6 +57,7 @@ export function homeView(d, now = Date.now()) {
     [b('🟢 Buy', 'b'), b('🔴 Sell', 'sl')],
     [b('📂 Positions', 'p'), b('👀 Near misses', 'nm')],
     [b('📋 Report', 'rp'), b('⚙️ Settings', 'st')],
+    [b(`🚨 Alerts: ${d.config?.playbook?.alerts?.enabled === false ? 'off' : 'on'}`, 'ia'), b('🧠 Smart wallets', 'sw')],
     [paused ? b('▶️ Resume', 'pz') : b('⏸ Pause', 'pz'), b('🔄 Refresh', 'h')],
   ];
   return { text, kb };
@@ -270,6 +272,13 @@ export function createMenu({ io, desk, ui, ownerId, now = () => Date.now() }) {
           break;
         }
         case 'nm': await io.answer(cq.id); await show(msgId, textView('👀 <b>near misses</b>', nearMissText(d.S), 'nm')); break;
+        case 'ia': { // Oct 31: insider alerts on/off from the home panel
+          const r = await desk.step('insideralerts', 1);
+          await io.answer(cq.id, r.ok ? (r.value ? '🚨 insider alerts on' : '🔕 insider alerts off') : r.error);
+          ui.panel = await show(msgId, home());
+          break;
+        }
+        case 'sw': await io.answer(cq.id); await show(msgId, textView('🧠 <b>smart wallets</b>', d.S?.copyLines ? smartText(d.S) : 'the copy lane is off', 'sw')); break;
         case 'rp': await io.answer(cq.id); await show(msgId, textView('📋 <b>report</b>', reportBody(d), 'rp')); break;
         case 'st': await io.answer(cq.id); await show(msgId, settingsView(d.config)); break;
         case 'si': { const s = SETTINGS[a1]; await io.answer(cq.id, s ? `${s.label}: ${showValue(s, getSetting(d.config, a1))}` : ''); break; }

@@ -14,7 +14,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import CONFIG from '../../config.json'; // the same config.json as the Node desk (bundled by wrangler)
 import { createEngine } from '../desk/engine.js';
-import { setKeyedRpc } from '../playbook/solana.js';
+import { setKeyedRpc, chargeKeyed } from '../playbook/solana.js';
+import { hookToken } from '../playbook/smart.js';
 import { equity, riskStatus } from '../desk/risk.js';
 import { applyOverrides, changeSetting, stepSetting } from '../desk/settings.js';
 import { checkToken, manualBuy, manualSell } from '../desk/manual.js';
@@ -26,7 +27,7 @@ import { runCommand } from '../telegram/commands.js';
 import * as alert from '../telegram/alerts.js';
 import { dashData, dashPage } from './dashboard.js';
 
-const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events', 'curve', 'pb', 'labels']; // day 5: + insider lane + label book
+const PARTS = ['desk', 'run', 'seen', 'holders', 'nm', 'scan', 'events', 'curve', 'pb', 'labels', 'copy', 'smart']; // day 5: + insider lane + label book; Oct 31: + copy lane book + smart-wallet list
 const json = (x, status = 200) => new Response(JSON.stringify(x, null, 1), { status, headers: { 'content-type': 'application/json' } });
 const log = {
   event: (type, data, line) => { if (line && type !== 'kill' && type !== 'alive') console.log(line); },
@@ -134,9 +135,47 @@ export class Desk extends DurableObject {
     if (url.pathname === '/admin/init' && req.method === 'POST') return this.init(await req.json());
     if (url.pathname === '/admin/endtest' && req.method === 'POST') return this.endTest(await req.json());
     if (url.pathname === '/admin/campaign' && req.method === 'POST') { const b = await req.json(); const r = this.engine.startCampaign(b); if (r.ok) await this.save(true); return json(r, r.ok ? 200 : 409); }
+    if (url.pathname === '/admin/smart' && req.method === 'POST') { const r = this.engine.pb ? this.engine.pb.setSmartList(await req.json()) : { ok: false, why: 'lane off' }; await this.save(); return json(r, r.ok ? 200 : 409); }
+    if (url.pathname === '/smart-hook' && req.method === 'POST') return this.onSmartHook(await req.json().catch(() => null));
     if (url.pathname === '/dash') return json(dashData(this.S, this.config, this.health()));
     if (url.pathname === '/admin/state') return json({ S: { ...this.S, _dirty: undefined }, outbox: this.outbox.length, sent: this.sentLog || [], config: this.config });
     return json(this.health());
+  }
+
+  // Helius webhook push: the smart wallets' txs, raw. 1 Helius credit per tx, charged whatever we answer, so every
+  // push goes on today's shared ledger and the webhook is paused for the rest of the day once the budget is spent.
+  async onSmartHook(body) {
+    const txs = Array.isArray(body) ? body : body ? [body] : [];
+    const sm = (this.S.smart ||= { list: [], hook: { day: '', events: 0, disabled: null } });
+    const H = (sm.hook ||= { day: '', events: 0, disabled: null });
+    const day = new Date().toISOString().slice(0, 10);
+    if (H.day !== day) { H.day = day; H.events = 0; }
+    H.events += txs.length; H.lastAt = Date.now();
+    chargeKeyed(txs.length);
+    if (this.S.copy?.stats) this.S.copy.stats.events = (this.S.copy.stats.events || 0) + txs.length;
+    let queued = 0;
+    for (const tx of txs.slice(0, 50)) { try { if (this.engine.pb?.onSmartTx(tx)) queued++; } catch (e) { console.log('smart hook tx: ' + String(e?.message || e).slice(0, 120)); } }
+    const budget = this.config.playbook?.copy?.hook_budget_day ?? 2500;
+    if (H.events > budget && !H.disabled) await this.pauseSmartHook(`daily push budget ${budget} spent`);
+    this.S._dirty.add('smart'); this.S._dirty.add('copy'); this.S._dirty.add('pb');
+    await this.save();
+    if (queued) { const a = await this.ctx.storage.getAlarm(); if (a == null || a > Date.now() + 1500) await this.ctx.storage.setAlarm(Date.now() + 500); }
+    return json({ ok: true, txs: txs.length, queued });
+  }
+
+  // delete her one webhook (100 credits) so nothing more is charged today; the next daily build re-creates it
+  async pauseSmartHook(why) {
+    const H = this.S.smart.hook;
+    H.disabled = { at: Date.now(), why };
+    const key = this.env.HELIUS_RPC_URL ? new URL(this.env.HELIUS_RPC_URL).searchParams.get('api-key') : null;
+    const id = this.S.smart.hookId;
+    if (!key || !id) { console.log(`smart hook over budget (${why}); no key/id to pause it`); return; }
+    try {
+      const r = await fetch(`https://api-mainnet.helius-rpc.com/v0/webhooks/${id}?api-key=${key}`, { method: 'DELETE', signal: AbortSignal.timeout(8000) });
+      chargeKeyed(100);
+      H.disabled.deleted = r.ok; if (r.ok) this.S.smart.hookId = null;
+      console.log(`smart hook paused: ${why} (delete ${r.status})`);
+    } catch (e) { console.log('smart hook pause failed: ' + String(e?.message || e).slice(0, 80)); }
   }
 
   health() {
@@ -298,6 +337,10 @@ export default {
     if (url.pathname.startsWith('/admin/')) {
       if (!same(req.headers.get('x-admin-key'), env.ADMIN_KEY)) return new Response('no', { status: 401 });
       return stub.fetch('https://desk' + url.pathname, { method: req.method, body: req.method === 'POST' ? await req.text() : undefined });
+    }
+    if (url.pathname === '/hook/smart' && req.method === 'POST') { // her Helius webhook (smart-wallet txs), auth = token derived from the admin key
+      if (!env.ADMIN_KEY || !same(req.headers.get('authorization'), await hookToken(env.ADMIN_KEY))) return new Response('no', { status: 401 });
+      return stub.fetch('https://desk/smart-hook', { method: 'POST', body: await req.text() });
     }
     if (url.pathname === '/health') return json(await (await stub.fetch('https://desk/health')).json());
     if (url.pathname === '/api/dash') {

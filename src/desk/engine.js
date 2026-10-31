@@ -348,6 +348,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
     else if (now() >= T.nextScan) { prune(); did = await scanDiscover(); }
     else if (pbOn && pb.discoverDue()) did = await pb.discover();
     else if (now() >= T.nextNm) did = await nearMissStep();
+    else if (pb && pb.alertsDue()) did = await pb.alertsStep(); // insider alerts: re-read watched dev crews for a dump
     else if (pb && pb.labelsDue()) did = await pb.labelsStep();
     else if (S.scan.phase === 'deep') { S.scan.phase = 'idle'; dirty('scan'); }
     const deepPending = S.scan.phase === 'deep' && S.scan.queue.length;
@@ -362,6 +363,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
   const snapshot = () => ({ st: riskStatus(st, config), state: st, todayR: todayR(), paused: Boolean(st.paused), stats: stats(st), run, config, nm: S.nm, S });
 
   if (pb) Object.defineProperty(S, 'pbLines', { value: () => pb.reportLines(), enumerable: false, configurable: true });
+  if (pb) Object.defineProperty(S, 'copyLines', { value: () => pb.copyLines(), enumerable: false, configurable: true });
   return {
     tick, watch, scanDiscover, pb, scanDeep, nearMissStep, snapshot, S,
     event: (type, line) => ev(type, {}, line), // day 4: manual trades from the button menu land in the same live feed

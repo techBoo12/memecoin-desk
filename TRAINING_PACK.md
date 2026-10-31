@@ -65,7 +65,7 @@ Source: "Building a DeFi degen bot · training pack" (11 pages, checked 31 Oct 2
 | Jito bundles + private RPC for exits | needs a wallet and a paid RPC; paper mode anyway | paper fills priced at the live quote minus fee + tip + haircut |
 | Bitquery launches/bundles | API key | Jito's public bundle explorer API + our own tx parsing |
 | Helius DAS getAsset | API key | mint account jsonParsed (authorities, extensions, metadata) |
-| Birdeye, Nansen smart money | API key / paid | DexScreener + GeckoTerminal; smart-money copy trading not built (the pack warns it bleeds) |
+| Birdeye, Nansen smart money | API key / paid | DexScreener + GeckoTerminal. Oct 31 (her ask): our OWN smart-wallet list from on-chain trades + a separate paper copy lane, see `COPY_AND_ALERTS.md` (the pack's warning stands: it's a test, own book, not in the 14-day numbers) |
 | Dune, Kaggle | login / API key | MELT (public GitHub) for history |
 | MELT's ready-made feature.pkl (122 features) | Google Drive said "quota exceeded" on Oct 31 | the bot's own cluster code run on MELT launches through the public archive RPC |
 | SolRPDS (62,895 pools), RugPull1K | SolRPDS is liquidity-inactivity on old Raydium pools (different question); RugPull1K is mostly EVM | not used; listed as next steps |

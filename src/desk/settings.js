@@ -35,6 +35,10 @@ export const SETTINGS = {
   pbtrail:     { path: 'playbook.trailing_stop_pct', min: 10, max: 50, unit: '%', label: 'insider lane: trailing stop below peak (E6)' },
   pbhold:      { path: 'playbook.max_hold_minutes', min: 10, max: 240, int: true, unit: 'm', label: 'insider lane: max hold (E8)' },
   pbsize:      { path: 'playbook.max_position_pct', min: 0.5, max: 5, unit: '%', label: 'insider lane: size, % of equity' },
+  // Oct 31 (her "both"): insider alerts + the smart-wallet copy lane (paper, own book)
+  insideralerts: { path: 'playbook.alerts.enabled', bool: true, label: 'insider alerts: dev crew loading / dumping a fresh coin (max a few per hour)' },
+  copyon:      { path: 'playbook.copy.enabled', bool: true, label: 'copy lane: paper-buy when smart wallets pile into a fresh coin (own book) on/off' },
+  copyk:       { path: 'playbook.copy.min_wallets', min: 2, max: 6, int: true, label: 'copy lane: how many smart wallets must buy within the window' },
   alerts:      { path: 'telegram.alertLevel', choices: ['all', 'trades'], label: 'alerts: all, or trades only (no scan digests / picks)' },
 };
 // mode is deliberately missing: paper stays paper.

@@ -226,6 +226,29 @@
       "links": 16,
       "ownerLookups": 10
     },
-    "migration_account": "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg"
+    "migration_account": "39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg",
+    "alerts": {
+      "_note": "Oct 31 (her 'both'): dev-crew alerts to her telegram. guesses, tune by use. 'dev crew' = wallets linked to the deployer on-chain (cluster.js): an inference, not proof",
+      "enabled": true,
+      "crew_buy_pct": 20,
+      "watch_min_pct": 10,
+      "dump_drop_pts": 5,
+      "dump_drop_rel_pct": 30,
+      "watch_minutes": 60,
+      "watch_every_s": 120,
+      "max_watch": 6,
+      "max_per_hour": 6
+    },
+    "copy": {
+      "_note": "Oct 31 (her 'both'): copy smart wallets, PAPER ONLY, own book (not in the 14-day numbers). list built once a day off the worker (tools/smart_wallets.mjs), their txs pushed by her one free Helius webhook (1 credit per tx). 'smart' = statistical label from past trades, not proof. guesses, tune by results",
+      "enabled": true,
+      "min_wallets": 2,
+      "window_min": 15,
+      "min_buy_sol": 0.1,
+      "max_minutes_since_migration": 60,
+      "max_open": 3,
+      "exit_on_smart_sell": true,
+      "hook_budget_day": 2500
+    }
   }
 }

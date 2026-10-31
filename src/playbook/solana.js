@@ -36,6 +36,14 @@ export function setKeyedRpc(url, { dailyCap, softPct } = {}) {
   if (softPct > 0) keyed.softPct = softPct;
 }
 export function bindKeyedLedger(ledger) { if (ledger) keyed.ledger = ledger; return keyed.ledger; }
+// credits spent on her key OUTSIDE this rpc client go on the same daily ledger, so the lane throttles around them:
+// the off-worker smart-wallet build (pushed with its credit count) and each Helius webhook push (1 credit per tx).
+export function chargeKeyed(n) {
+  const L = keyed.ledger, day = new Date().toISOString().slice(0, 10);
+  if (L.day !== day) { L.day = day; L.used = 0; L.denied = 0; }
+  L.used += Math.max(0, Math.round(Number(n) || 0));
+  return L.used;
+}
 export function keyedStatus() { return { on: Boolean(keyed.url), cap: keyed.cap, softPct: keyed.softPct, ...keyed.ledger }; }
 function keyedAllowed(priority) {
   if (!keyed.url) return false;
