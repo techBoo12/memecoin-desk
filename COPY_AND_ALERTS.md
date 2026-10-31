@@ -4,6 +4,8 @@ Paper only. No wallet, no keys, no signing, no real money. Everything reads publ
 
 ## 1. insider alerts (Telegram)
 
+> **Changed Oct 31 9:23 AM (her word):** loading/dumping on coins the bot did NOT buy are logged quietly, never sent. Only a crew dumping a coin she HOLDS alerts. Every buy sends a full buy card. See DEV_HISTORY_AND_GUARD.md.
+
 What the insider lane already reads for every fresh pump.fun graduate (the dev's linked wallets, `cluster.js`) becomes one short alert:
 
 - **loading**: the dev's linked wallets hold `alerts.crew_buy_pct` (20%) or more of the supply when the lane finishes tracing the coin.

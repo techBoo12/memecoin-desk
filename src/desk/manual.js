@@ -11,6 +11,7 @@
 //      protect manual positions (balance first).
 // HARD STOP: paper only. No wallet, no keys, no signer, no swap. Quotes only.
 // ============================================================================
+import { guardTradeRecord } from '../playbook/guard.js';
 import { filter, usd } from './filter.js';
 import { honeypotCheck, quote, solPriceUsd, mintDecimals } from './honeypot.js';
 import { analyze } from './analyst.js';
@@ -132,6 +133,7 @@ export async function manualSell(S, posId, pct, config, { net = NET } = {}) {
   if (trade) {
     trade.exit = { kind: 'manual', fillPrice: px.price, fillSource: px.source, peakPct: +(((pos.peakPrice / pos.entryPrice) - 1) * 100).toFixed(1) };
     trade.why = pos.why;
+    if (pos.guard?.firstSignalAt) trade.guard = guardTradeRecord(pos.guard, trade); // Oct 31: early-exit guard cost/benefit
     afterClose(st, trade, config);
   }
   return { ok: true, fill, trade, pos: trade ? null : pos, price: px.price, source: px.source, soldTokens: before.tokens - (trade ? 0 : pos.tokens) };

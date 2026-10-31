@@ -58,9 +58,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function makeRpc({ archive = false, minGapMs = 0, fetchImpl = fetch } = {}) {
   let last = 0;
-  return async function rpc(method, params, { timeoutMs = 12000, priority = false } = {}) {
-    const free = archive ? ARCHIVE : method === 'getTokenLargestAccounts' ? LARGEST : HISTORY_METHODS.has(method) ? HISTORY : STATE;
+  // keyedOnly: a Helius-only method (getTransactionsForAddress): the free gateways don't have it, so don't spend a
+  // subrequest on them. credits: what the call costs on Helius (getTransactionsForAddress = 10), booked on the ledger.
+  return async function rpc(method, params, { timeoutMs = 12000, priority = false, keyedOnly = false, credits = 1 } = {}) {
+    const free = keyedOnly ? [] : archive ? ARCHIVE : method === 'getTokenLargestAccounts' ? LARGEST : HISTORY_METHODS.has(method) ? HISTORY : STATE;
     const all = keyedAllowed(priority) ? [keyed.url, ...free] : free;
+    if (!all.length) throw new Error(`rpc ${method}: helius key off or today's budget used`);
     const open = all.filter((u) => !(blocked.get(u) > Date.now()));
     const list = open.length ? open : all;
     let err;
@@ -68,7 +71,7 @@ export function makeRpc({ archive = false, minGapMs = 0, fetchImpl = fetch } = {
       for (const url of list) {
         if (minGapMs) { const w = last + minGapMs - Date.now(); last = Math.max(Date.now(), last + minGapMs); if (w > 0) await sleep(w); }
         rpcStats.calls++; rpcStats.byMethod[method] = (rpcStats.byMethod[method] || 0) + 1;
-        if (url === keyed.url) keyed.ledger.used++;
+        if (url === keyed.url) keyed.ledger.used += credits;
         try {
           const res = await fetchImpl(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout(timeoutMs) });
           if (!res.ok) { err = `HTTP ${res.status}`; if (res.status === 403) blocked.set(url, Date.now() + 10 * 60_000); continue; }

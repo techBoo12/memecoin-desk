@@ -4,6 +4,7 @@
 //      event, plain text, lowercase, a little emoji, no walls of numbers.
 // HARD STOP: formatting only. Alerts never decide anything.
 // ============================================================================
+import { buyCard } from './buycard.js';
 const sp = (x) => (x >= 1 ? x.toFixed(4) : x.toPrecision(4));
 const usd = (x) => (x >= 1e6 ? `$${(x / 1e6).toFixed(1)}m` : x >= 1e3 ? `$${Math.round(x / 1e3)}k` : `$${Number(x).toFixed(0)}`);
 const signed = (x, d = 2) => `${x >= 0 ? '+' : ''}${Number(x).toFixed(d)}`;
@@ -61,20 +62,15 @@ export function pickAlert({ symbol, score, mcap, liq, ageMin, verdict, q }) {
 
 export function buyAlert(pos, config) {
   const w = pos.why;
-  return [
-    `🟢 paper buy $${pos.symbol}`,
-    `$${pos.sizeUsd.toFixed(2)} @ $${sp(pos.entryPrice)}`,
-    `stop $${sp(pos.stopPrice)} (-${config.risk.stopLossPct}%) · 1R = $${pos.riskUsd.toFixed(2)}`,
-    ...(w ? [
-      '',
-      `why: score ${w.score}/100 · 8/8 rules · quality ${w.quality.length}/${w.quality.length}`,
-      `• buys ${w.buys}`,
-      `• holders ${w.holders}`,
-      `• chart ${w.tape}`,
-      `• liq ${usd(w.liq)} on ${usd(w.mcap)} mcap`,
-      `• sell test ok: ${w.sellTest.split(',')[0]}`,
-    ] : []),
-  ].join('\n');
+  if (!w) return [`🟢 paper buy $${pos.symbol}`, `$${pos.sizeUsd.toFixed(2)} @ $${sp(pos.entryPrice)}`, `stop $${sp(pos.stopPrice)} (-${config.risk.stopLossPct}%) · 1R = $${pos.riskUsd.toFixed(2)}`].join('\n');
+  // Oct 31 (her ask): one card with everything: crew %, dev history, rules passed, why
+  return buyCard({
+    lane: 'desk', symbol: pos.symbol, mint: pos.mint, pool: w.pool || pos.pair || null, sizeUsd: pos.sizeUsd, entryPrice: pos.entryPrice, liqUsd: w.liq, mcapUsd: w.mcap,
+    crew: { pct: w.crewPct ?? null, cap: config.filter?.maxBundledPct, source: 'linked/insider wallets, rugcheck proxy' }, devPct: Number.isFinite(w.devPct) ? w.devPct : null,
+    devHist: pos.devHist || null, passed: (w.rules || []).map((r) => r.replace(/^\d+ /, '')),
+    why: `score ${w.score}/100 · 8/8 rules · quality ${w.quality.length}/${w.quality.length} · ${w.head || 'head of desk approved'}`,
+    extra: [`stop $${sp(pos.stopPrice)} (-${config.risk.stopLossPct}%) · 1R = $${pos.riskUsd.toFixed(2)}`, `buys ${w.buys} · holders ${w.holders}`, `chart ${w.tape}`, `sell test ok: ${w.sellTest.split(',')[0]}`],
+  });
 }
 
 export function sellAlert(trade) {

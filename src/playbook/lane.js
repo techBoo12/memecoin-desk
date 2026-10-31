@@ -23,12 +23,15 @@ import { getJSON, SOL_MINT } from '../lib/http.js';
 import { equity, rollDay, newState } from '../desk/risk.js';
 import { keysOf, tradeOf, recordSmartTrade, pruneSmartTrades, copyTrigger, smartExited, short } from './smart.js';
 import { sellPaper } from '../desk/executor.js';
+import { runDevHist, devCfg, devHistLine } from './devhist.js';
+import { guardCfg, guardSignals, guardShouldAlert, guardDump, guardTradeRecord, guardSummary } from './guard.js';
+import { buyCard, passedList } from '../telegram/buycard.js';
 
 export function newPlaybookState() {
   return { seen: {}, queue: [], build: null, recent: [], skips: {}, stats: { detected: 0, built: 0, entered: 0, skipped: 0, rpcCalls: 0 },
     latency: [], symbols: {}, rugDeployers: [], shareRefs: {}, alertSeq: 0, killDays: {}, killSwitch: null, cpuMs: [],
     timers: { nextDiscover: 0, nextMonitor: 0, nextLabels: 0, nextAlerts: 0 },
-    alerts: { sent: [], perCoin: {}, watch: {}, suppressed: 0, n: 0 }, copyQueue: [] };
+    alerts: { sent: [], perCoin: {}, watch: {}, suppressed: 0, n: 0 }, copyQueue: [], devCache: {}, devStats: { day: '', lookups: 0, credits: 0, hits: 0, total: 0, byVerdict: {} }, trusted: { checked: 0, used: 0, refused: {} } };
 }
 
 // the copy lane's own paper book (her ask Oct 31: "copy smart wallets", kept apart from the 14-day test numbers)
@@ -52,11 +55,15 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
   S.labels ||= newLabelBook();
   const P = S.pb, st = S.desk;
   P.alerts ||= { sent: [], perCoin: {}, watch: {}, suppressed: 0, n: 0 }; P.copyQueue ||= []; P.timers.nextAlerts ??= 0;
+  P.devCache ||= {}; P.devStats ||= { day: '', lookups: 0, credits: 0, hits: 0, total: 0, byVerdict: {} }; P.trusted ||= { checked: 0, used: 0, refused: {} };
+  P.alerts.quiet ||= { buy: 0, dump: 0 };
   S.copy ||= newCopyState(config);
   S.smart ||= { list: [], builtAt: null, hook: { day: '', events: 0, disabled: null } };
   const C = S.copy, CB = S.copy.book;
   const ccfg = () => ({ enabled: false, min_wallets: 2, window_min: 15, max_minutes_since_migration: 60, max_open: 3, exit_on_smart_sell: true, min_buy_sol: 0.1, ...(cfg.copy || {}) });
   const acfg = () => ({ enabled: true, crew_buy_pct: 20, watch_min_pct: 10, dump_drop_pts: 5, dump_drop_rel_pct: 30, watch_minutes: 60, watch_every_s: 120, max_watch: 6, max_per_hour: 6, ...(cfg.alerts || {}) });
+  // Oct 31 (her voice note 9:23 AM): a dev crew over the 20% cap may still be fine when the dev's past launches survived
+  const tcfg = () => ({ enabled: true, max_crew_pct: 60, size_frac: 0.25, ...(cfg.trusted_dev || {}) });
   const copyOpen = () => CB.positions;
   const bookOf = (pos) => (pos.strategy === 'copy' ? CB : st);
   bindKeyedLedger(P.keyed ||= { day: '', used: 0, denied: 0 }); // today's Helius calls, kept in state so a restart doesn't reset the count
@@ -154,6 +161,10 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
   // what the lane already reads (the dev's linked wallets and their share) turned into ONE concise Telegram line.
   // "dev crew" = wallets linked to the deployer by funding / same slot / same bundle / transfers (cluster.js).
   // That link is an inference from on-chain patterns, not proof the same person controls them.
+  // Oct 31 9:23 AM (her voice note): no Telegram alert for crews loading/dumping coins the bot did NOT buy.
+  // Detection + logging keep running quietly (events + /alerts counts). A crew dumping a coin she HOLDS
+  // (any lane) is about her open trade: that one still alerts (rate-limited, once per coin).
+  const heldMint = (mint) => st.positions.some((p) => p.mint === mint) || CB.positions.some((p) => p.mint === mint) || (S.hype?.book?.positions || []).some((p) => p.mint === mint);
   function alertAllowedNow(mint, kind) {
     const a = acfg(), A = P.alerts;
     if (a.enabled === false) return false;
@@ -164,17 +175,22 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     return true;
   }
   function crewAlert(kind, x) {
+    const held = heldMint(x.mint);
+    const what = kind === 'buy' ? `${x.share.toFixed(1)}% (${x.wallets} wallets)` : `${x.from.toFixed(1)}%→${x.to.toFixed(1)}% in ${Math.max(1, Math.round(x.mins))} min`;
+    if (kind === 'buy' || !held) { // quiet: logged, counted, never sent
+      P.alerts.quiet[kind] = (P.alerts.quiet[kind] || 0) + 1;
+      ev('info', { kind, mint: x.mint, quiet: true }, `· crew ${kind === 'buy' ? 'loading' : 'dumping'} $${x.symbol} ${what} (not held: logged only, no alert)`);
+      dirty('pb');
+      return false;
+    }
     if (!alertAllowedNow(x.mint, kind)) return false;
     const A = P.alerts; A.sent.push(now()); A.perCoin[x.mint][kind] = now(); A.n++;
     for (const [m, v] of Object.entries(A.perCoin)) if (now() - Math.max(...Object.values(v), 0) > 24 * 3.6e6) delete A.perCoin[m];
     const link = `https://dexscreener.com/solana/${x.pool || x.mint}`;
-    const text = kind === 'buy'
-      ? [`🚨 dev crew loading $${x.symbol}`, `${x.wallets} wallets linked to the dev hold ${x.share.toFixed(1)}% of supply${x.share > cfg.max_cluster_share_pct ? ` (over the ${cfg.max_cluster_share_pct}% cap)` : ''}`,
-        `mint ${short(x.mint)} · ${x.min != null ? `${Number(x.min).toFixed(1)} min after graduation` : 'fresh graduate'}`, link, 'linked = on-chain pattern, not proof · paper desk']
-      : [`🔻 dev crew dumping $${x.symbol}`, `linked wallets: ${x.from.toFixed(1)}% → ${x.to.toFixed(1)}% of supply in ${Math.max(1, Math.round(x.mins))} min`,
-        `mint ${short(x.mint)}`, link, 'linked = on-chain pattern, not proof · paper desk'];
+    const text = [`🔻 dev crew dumping $${x.symbol}: you HOLD this one (paper)`, `linked wallets: ${x.from.toFixed(1)}% → ${x.to.toFixed(1)}% of supply in ${Math.max(1, Math.round(x.mins))} min`,
+      `mint ${short(x.mint)}`, link, 'the exit rules keep running on it · linked = on-chain pattern, not proof · paper desk'];
     notify('insider_alert', text.join('\n'));
-    ev('info', { kind, mint: x.mint }, `🚨 INSIDER ALERT ${kind} $${x.symbol} ${kind === 'buy' ? x.share.toFixed(1) + '%' : `${x.from.toFixed(1)}%→${x.to.toFixed(1)}%`}`);
+    ev('info', { kind, mint: x.mint }, `🚨 INSIDER ALERT ${kind} $${x.symbol} ${what} (held)`);
     dirty('pb');
     return true;
   }
@@ -188,6 +204,28 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       P.alerts.watch[b.mint] = { symbol: b.symbol, pool: b.pool, tas: Object.keys(res.tokenAccounts).slice(0, 60), supply: String(res.supply), share0: share, peak: share, at: now(), until: now() + a.watch_minutes * 60_000 };
     }
   }
+
+  // ====================== dev history (her ask Oct 31): the dev + funder's earlier launches ======================
+  // Cached per dev wallet; a daily cap on lookups; credits booked on the shared Helius ledger. Evidence, not proof.
+  async function devHistory({ mint, dev, funder, symbol }) {
+    const d = devCfg(cfg);
+    if (d.enabled === false || !dev) return null;
+    const D = P.devStats, day = new Date(now()).toISOString().slice(0, 10);
+    if (D.day !== day) { D.day = day; D.lookups = 0; D.credits = 0; D.hits = 0; }
+    const c = P.devCache[dev];
+    if (c && now() - c.at < d.cache_hours * 3.6e6 && (c.funder || null) === (funder || null)) { D.hits++; return { ...c, cached: true }; }
+    if (D.lookups >= d.max_lookups_day) return { verdict: 'unknown', why: `daily dev-history cap (${d.max_lookups_day} lookups) reached: unknown, NOT clean`, counts: { launches: 0 }, evidence: [], notes: [] };
+    D.lookups++; D.total = (D.total || 0) + 1;
+    const h = await runDevHist({ mint, dev, funder, labels: S.labels }, { rpc: rio.rpc, getJSON: io.getJSON }, cfg, now());
+    D.credits += h.credits || 0;
+    D.byVerdict[h.verdict] = (D.byVerdict[h.verdict] || 0) + 1;
+    P.devCache[dev] = { ...h, evidence: (h.evidence || []).slice(0, 6) };
+    const keys = Object.keys(P.devCache); if (keys.length > 300) for (const k of keys.slice(0, keys.length - 300)) delete P.devCache[k];
+    ev('info', { mint, dev, verdict: h.verdict }, `🔎 DEV HISTORY $${symbol || mint.slice(0, 4)}: ${h.verdict} · ${h.why} · ${h.calls} reads, ~${h.credits} credits`);
+    dirty('pb');
+    return h;
+  }
+
   async function alertsStep() {
     const a = acfg();
     P.timers.nextAlerts = now() + a.watch_every_s * 1000;
@@ -336,22 +374,56 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     ];
     if (!b.copy) P.symbols[String(b.symbol).toLowerCase()] = now();
     for (const [k, t] of Object.entries(P.symbols)) if (now() - t > cfg.copycat_block_minutes * 60_000) delete P.symbols[k];
-    const d = decide(checks);
+    let d = decide(checks);
     const summary = checks.map((c) => `${c.code} ${c.status}${c.value != null ? ` ${c.value}` : ''}`).join(' · ');
+    const devArgs = { mint: b.mint, dev: b.deployer, funder: res.cluster?.deployerFunder || b.wallets?.[b.deployer]?.funder || null, symbol: b.symbol };
+
+    // TRUSTED-DEV EXCEPTION (insider lane only, her ask Oct 31): the ONLY failures are the dev-crew cap (R5) and, when the
+    // crew is what makes the top 10 big, R4 (the top 10 WITHOUT the crew must still pass). Crew <= max_crew_pct (60%).
+    // Then the dev's history decides: clean -> paper buy at quarter size, tagged trusted_dev, counted in the 14-day test.
+    let trusted = null, devHist = null;
+    if (!d.ok && !b.copy && tcfg().enabled !== false) {
+      const T = tcfg();
+      const bad = checks.filter((c) => c.status === 'fail' || c.status === 'unknown');
+      const r5 = bad.find((c) => c.code === 'R5' && c.status === 'fail');
+      const onlyCrew = r5 && bad.every((c) => c === r5 || (c.code === 'R4' && c.status === 'fail' && res.top10ExCrewPct != null && res.top10ExCrewPct <= cfg.max_top10_pct));
+      if (onlyCrew && res.clusterPct <= T.max_crew_pct) {
+        P.trusted.checked++;
+        devHist = await devHistory(devArgs);
+        if (devHist?.verdict === 'clean') {
+          trusted = { crewPct: res.clusterPct, top10ExCrewPct: res.top10ExCrewPct, cap: T.max_crew_pct, sizeFrac: T.size_frac };
+          d = { ok: true, failed: null };
+          ev('info', { mint: b.mint, dev: b.deployer }, `🤝 TRUSTED-DEV EXCEPTION $${b.symbol}: crew ${res.clusterPct.toFixed(1)}% (> ${cfg.max_cluster_share_pct}%, <= ${T.max_crew_pct}%) · top10 without crew ${res.top10ExCrewPct?.toFixed(1)}% · ${devHistLine(devHist)} · quarter size`);
+        } else {
+          P.trusted.refused[devHist?.verdict || 'unknown'] = (P.trusted.refused[devHist?.verdict || 'unknown'] || 0) + 1;
+          d = { ok: false, failed: { ...r5, note: `${r5.note} · trusted-dev exception refused: ${devHistLine(devHist)}` } };
+        }
+      }
+    }
     if (!d.ok && b.copy) { copySkip(b, d.failed.code, `${d.failed.note || d.failed.value} · ${why(d.failed.code)}`, { checks: summary }); return 'copy_skip'; }
     if (!d.ok) { label(b, res, 'skipped', d.failed.code); skip(b, d.failed.code, `${d.failed.note || d.failed.value} · ${why(d.failed.code)}`, { checks: summary, cluster: res.cluster.size, share: res.clusterPct }); return 'pb_skip'; }
+
+    // every coin about to be bought gets its dev history (alert detail + one more skip): a SERIAL RUGGER is never bought,
+    // even under the 20% cap. This only removes buys (Oct 31: told to Tab, reported to her).
+    devHist ||= await devHistory(devArgs);
+    if (devHist?.verdict === 'serial_rugger' && devCfg(cfg).skip_serial_rugger !== false) {
+      const note = `${devHistLine(devHist)} · history = evidence, not proof`;
+      if (b.copy) { copySkip(b, 'DH', note, { checks: summary }); return 'copy_skip'; }
+      label(b, res, 'skipped', 'DH'); skip(b, 'DH', note, { checks: summary, cluster: res.cluster.size, share: res.clusterPct }); return 'pb_skip';
+    }
 
     // (e) size + execution caps
     const book = b.copy ? CB : st, strat = b.copy ? 'copy' : 'insider';
     const trades = book.closed.filter((t) => t.strategy === strat);
-    const size = sizeInsider({ equity: equity(book), cash: book.cash, poolSol: res.reserves.sol, solUsd, kellyPct: kellyCapPct(trades, cfg) }, cfg);
+    const size0 = sizeInsider({ equity: equity(book), cash: book.cash, poolSol: res.reserves.sol, solUsd, kellyPct: kellyCapPct(trades, cfg) }, cfg);
+    const size = trusted ? { ...size0, sizeUsd: +(size0.sizeUsd * trusted.sizeFrac).toFixed(2), limit: `${size0.limit} x ${trusted.sizeFrac} (trusted-dev exception)` } : size0;
     const lamports = Math.round((size.sizeUsd / solUsd) * 1e9);
     const q = lamports > 0 ? await io.quote(SOL_MINT, b.mint, lamports, cfg.max_slippage_bps) : { failed: 'size' };
     const fee = await estimateFeeSol(rio, b.pool, cfg);
     const ex = execChecks({ impactBps: q.failed ? null : Math.round(Number(q.priceImpactPct || 0) * 1e4), feeSol: fee.feeSol }, cfg);
     const dx = decide(ex);
     if ((!dx.ok || size.sizeUsd < 0.5) && b.copy) { copySkip(b, dx.failed?.code || 'size', dx.failed ? `${dx.failed.note || dx.failed.value}` : `size $${size.sizeUsd} too small`); return 'copy_skip'; }
-    if (!dx.ok || size.sizeUsd < 0.5) { label(b, res, 'skipped', dx.failed?.code || 'size'); skip(b, dx.failed?.code || 'size', dx.failed ? `${dx.failed.note || dx.failed.value} · ${why(dx.failed.code)}` : `size $${size.sizeUsd} too small`); return 'pb_skip'; }
+    if (!dx.ok || size.sizeUsd < 0.5) { label(b, res, 'skipped', dx.failed?.code || 'size'); skip(b, dx.failed?.code || 'size', dx.failed ? `${dx.failed.note || dx.failed.value} · ${why(dx.failed.code)}` : `size $${size.sizeUsd} too small${trusted ? ' (trusted-dev quarter size)' : ''}`); return 'pb_skip'; }
 
     // paper buy, pessimistic (9.4): the live quote, minus priority fee + tip, minus a sandwich haircut
     const dec = res.mintInfo.decimals ?? 6;
@@ -361,12 +433,13 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     const entryPrice = spent / tokens;
     const alertId = `A${String(++P.alertSeq).padStart(4, '0')}`;
     const id = b.copy ? `C${String(CB.closed.length + CB.positions.length + 1).padStart(3, '0')}` : `X${String(st.closed.filter((t) => t.strategy === 'insider').length + insiderOpen().length + 1).padStart(3, '0')}`;
+    const devBrief = devHist ? { verdict: devHist.verdict, why: devHist.why, counts: devHist.counts, evidence: (devHist.evidence || []).slice(0, 3) } : null;
     const pos = {
-      id, strategy: strat, ...(b.copy ? { copy: { wallets: b.copy.wallets, sol: b.copy.sol, firstAt: b.copy.firstAt, signalAt: b.copy.at } } : {}), mint: b.mint, symbol: b.symbol, url: `https://dexscreener.com/solana/${b.pool}`, decimals: dec,
+      id, strategy: strat, ...(trusted ? { trusted_dev: true, trustedDev: trusted } : {}), ...(b.copy ? { copy: { wallets: b.copy.wallets, sol: b.copy.sol, firstAt: b.copy.firstAt, signalAt: b.copy.at } } : {}), mint: b.mint, symbol: b.symbol, url: `https://dexscreener.com/solana/${b.pool}`, decimals: dec,
       entryAt: new Date(now()).toISOString(), entryPrice, sizeUsd: spent, riskUsd: spent * (cfg.trailing_stop_pct / 100),
       tokens, tokensOriginal: tokens, realizedUsd: 0, markUsd: tokens * res.priceSol * solUsd, lastPrice: res.priceSol * solUsd,
-      stopPrice: entryPrice * (1 - cfg.trailing_stop_pct / 100), peakPrice: entryPrice, trailing: true, tpDone: [], score: null,
-      why: { checks: summary, cluster: `${res.cluster.size} wallets hold ${res.clusterPct?.toFixed(2)}%`, size: `${size.limit}: $${size.sizeUsd}`, costs: `$${costs.toFixed(4)} fees+tip+haircut`, fee },
+      stopPrice: entryPrice * (1 - cfg.trailing_stop_pct / 100), peakPrice: entryPrice, trailing: true, tpDone: [], score: null, devHist: devBrief,
+      why: { checks: summary, cluster: `${res.cluster.size} wallets hold ${res.clusterPct?.toFixed(2)}%`, size: `${size.limit}: $${size.sizeUsd}`, costs: `$${costs.toFixed(4)} fees+tip+haircut`, fee, dev: devHistLine(devHist), ...(trusted ? { exception: `TRUSTED-DEV EXCEPTION: crew ${trusted.crewPct.toFixed(1)}% > ${cfg.max_cluster_share_pct}% cap, dev history clean` } : {}) },
       pb: { pool: b.pool, alertId, t0: b.t0, latencyMs: now() - b.t0, deployer: b.deployer, baseVault: b.poolInfo.baseVault, quoteVault: b.poolInfo.quoteVault, lpMint: b.poolInfo.lpMint,
         supply: res.supply, members: [...res.cluster.members.keys()], tokenAccounts: res.tokenAccounts, lastBal: { ...(res.taBal || {}) }, checkedSigs: [], shareHist: [[now(), res.clusterPct]], tpDone: [], warned: 0, sellFails: 0,
         entry: { lpSupply: b.poolInfo.lpSupply, deployerBal: res.deployerBal, clusterBal: res.clusterBal, clusterShare: res.clusterPct }, minSinceMigration: b.minutesSinceMigration },
@@ -374,18 +447,24 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     book.cash -= spent; book.positions.push(pos);
     if (b.copy) {
       C.stats.entered++;
-      C.recent.unshift({ at: now(), sym: b.symbol, mint: b.mint, d: 'buy', code: 'COPY', note: `$${spent.toFixed(2)} · ${b.copy.wallets.length} smart wallets · cluster ${res.clusterPct?.toFixed(1)}%` }); C.recent.length = Math.min(C.recent.length, 40);
+      C.recent.unshift({ at: now(), sym: b.symbol, mint: b.mint, d: 'buy', code: 'COPY', note: `$${spent.toFixed(2)} · ${b.copy.wallets.length} smart wallets · cluster ${res.clusterPct?.toFixed(1)}% · dev ${devHist?.verdict || 'n/a'}` }); C.recent.length = Math.min(C.recent.length, 40);
       dirty('copy');
     } else {
       P.latency.push(pos.pb.latencyMs); if (P.latency.length > 500) P.latency.shift();
       P.stats.entered++;
-      label(b, res, 'traded', 'entered');
-      P.recent.unshift({ at: now(), sym: b.symbol, mint: b.mint, d: 'buy', code: 'BUY', note: `$${spent.toFixed(2)} · cluster ${res.cluster.size} wallets ${res.clusterPct?.toFixed(1)}%` });
+      if (trusted) P.trusted.used++;
+      label(b, res, 'traded', trusted ? 'trusted_dev' : 'entered');
+      P.recent.unshift({ at: now(), sym: b.symbol, mint: b.mint, d: 'buy', code: trusted ? 'TRUSTED-DEV' : 'BUY', note: `$${spent.toFixed(2)} · cluster ${res.cluster.size} wallets ${res.clusterPct?.toFixed(1)}% · dev ${devHist?.verdict || 'n/a'}` });
     }
-    ev('buy', { pos: { ...pos, pb: undefined } }, `▲ ${b.copy ? 'COPY' : 'INSIDER'} PAPER BUY ${id} $${b.symbol} $${spent.toFixed(2)} @ $${entryPrice.toPrecision(4)} · ${summary.slice(0, 160)}`);
-    const copyHead = b.copy ? `🧠 COPY LANE (paper, own $${CB.startBalance} book, not in the 14-day numbers): ${b.copy.wallets.length} smart wallets bought within ${Math.max(1, Math.round((b.copy.at - b.copy.firstAt) / 60000))} min: ${b.copy.wallets.slice(0, 4).map(short).join(', ')}\n` : '';
-    notify('buy', copyHead + signalText({ type: 'ENTRY', alertId, at: now(), slot: b.creation?.slot, name: b.symbol, symbol: b.symbol, mint: b.mint, pool: b.pool, priceSol: res.priceSol, priceUsd: res.priceSol * solUsd,
-      mcapUsd: res.priceSol * solUsd * Number(res.supply) / 10 ** dec, liqUsd: liquidityUsd(res.reserves, solUsd), minSinceMigration: b.minutesSinceMigration,
+    ev('buy', { pos: { ...pos, pb: undefined } }, `▲ ${b.copy ? 'COPY' : trusted ? 'INSIDER (TRUSTED-DEV EXCEPTION)' : 'INSIDER'} PAPER BUY ${id} $${b.symbol} $${spent.toFixed(2)} @ $${entryPrice.toPrecision(4)} · dev ${devHist?.verdict || 'n/a'} · ${summary.slice(0, 160)}`);
+    const mcapUsd = res.priceSol * solUsd * Number(res.supply) / 10 ** dec, liqUsd = liquidityUsd(res.reserves, solUsd);
+    const whyLine = b.copy ? `${b.copy.wallets.length} smart wallets bought within ${Math.max(1, Math.round((b.copy.at - b.copy.firstAt) / 60000))} min (${b.copy.wallets.slice(0, 3).map(short).join(', ')}), then every safety rule passed`
+      : trusted ? `fresh pump.fun graduate (${Number(b.minutesSinceMigration || 0).toFixed(1)} min), crew ${trusted.crewPct.toFixed(1)}% is over the ${cfg.max_cluster_share_pct}% cap BUT under ${trusted.cap}%, the top 10 without the crew is ${trusted.top10ExCrewPct?.toFixed(1)}%, and the dev's past launches survived with 0 rugs. every other rule passed. quarter size`
+        : `fresh pump.fun graduate (${Number(b.minutesSinceMigration || 0).toFixed(1)} min), every safety rule passed`;
+    const card = buyCard({ lane: b.copy ? 'copy' : trusted ? 'trusted_dev' : 'insider', symbol: b.symbol, mint: b.mint, pool: b.pool, sizeUsd: spent, entryPrice, liqUsd, mcapUsd,
+      crew: { wallets: res.cluster.size, pct: res.clusterPct, cap: cfg.max_cluster_share_pct }, devPct: res.supply ? (res.deployerBal / Number(res.supply)) * 100 : null, devHist, passed: passedList([...checks, ...ex]), why: whyLine });
+    notify('buy', card + '\n\n' + signalText({ type: 'ENTRY', alertId, at: now(), slot: b.creation?.slot, name: b.symbol, symbol: b.symbol, mint: b.mint, pool: b.pool, priceSol: res.priceSol, priceUsd: res.priceSol * solUsd,
+      mcapUsd, liqUsd, minSinceMigration: b.minutesSinceMigration,
       filters: filtersOf(checks), clusterWallets: res.cluster.size, clusterShare: res.clusterPct, clusterChange5m: 0, sizePct: (spent / equity(book)) * 100 }));
     P.timers.nextMonitor = now();
     dirty('pb', 'desk');
@@ -465,7 +544,7 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       priceSol: obs.priceSol, priceUsd: obs.price, liqUsd: obs.solReserve * 2 * solUsd, minSinceMigration: (pos.pb.minSinceMigration || 0) + (now() - Date.parse(pos.entryAt)) / 60000,
       clusterWallets: pos.pb.members.length, clusterShare: obs.clusterShare, clusterChange5m: change5m(pos, obs), code: t.code, multiple: f.price / pos.entryPrice, note: `${t.reason} · fill: ${f.source}` };
     if (trade) {
-      Object.assign(trade, { strategy: pos.strategy, code: t.code, peakPrice: pos.peakPrice, exitSource: f.source, latencyMs: pos.pb.latencyMs, ...(pos.copy ? { copyWallets: pos.copy.wallets.length } : {}) });
+      Object.assign(trade, { strategy: pos.strategy, ...(pos.trusted_dev ? { trusted_dev: true } : {}), devVerdict: pos.devHist?.verdict || null, ...(pos.guard?.firstSignalAt ? { guard: guardTradeRecord(pos.guard, trade) } : {}), code: t.code, peakPrice: pos.peakPrice, exitSource: f.source, latencyMs: pos.pb.latencyMs, ...(pos.copy ? { copyWallets: pos.copy.wallets.length } : {}) });
       (pos.strategy === 'copy' ? C.recent : P.recent).unshift({ at: now(), sym: pos.symbol, mint: pos.mint, d: 'sell', code: t.code, note: `${trade.pnlPct}% · ${t.reason}` });
       if (pos.strategy === 'copy') dirty('copy');
       ev('sell', { trade }, `▼ ${pos.strategy === 'copy' ? 'COPY' : 'INSIDER'} PAPER SELL ${trade.id} $${pos.symbol} ${trade.pnlUsd >= 0 ? '+' : '-'}$${Math.abs(trade.pnlUsd).toFixed(2)} (${trade.pnlPct}%) · ${t.code} ${t.reason}`);
@@ -477,6 +556,63 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     dirty('desk', 'pb', 'copy');
   }
   const change5m = (pos, obs) => { const old = (pos.pb.shareHist || []).find(([t]) => t >= obs.at - 300_000); return old ? obs.clusterShare - old[1] : null; };
+
+  // ---------- early-exit guard (her ask Oct 31 9:26/9:29 AM): ASK, never sell on its own. Pack exits E1-E8 unchanged.
+  function guardLook(pos, obs, added, t) {
+    const g = guardCfg(cfg);
+    const sigs = guardSignals(pos, obs, g, { newWallets: added });
+    const G = pos.guard;
+    for (const sg of sigs) if (!G.log.some((x) => x.code === sg.code)) { G.log.push(sg); if (G.log.length > 20) G.log.shift(); ev('info', { id: pos.id, mint: pos.mint, guard: sg.code }, `🛡 GUARD ${sg.code} ${pos.id} $${pos.symbol}: ${sg.evidence}`); }
+    if (sigs.length && !G.firstSignalAt) {
+      G.firstSignalAt = obs.at; G.shareAtSignal = obs.clusterShare; G.priceAtSignal = obs.price;
+      const gross = pos.tokens * obs.price;
+      const net = Math.max(0, gross - paperCostUsd({ sizeUsd: gross, feeSol: cfg.max_priority_fee, solUsd }, cfg));
+      G.autoSell = { at: obs.at, price: obs.price, proceedsUsd: +net.toFixed(4), pnlUsd: +(net + (pos.realizedUsd || 0) - pos.sizeUsd).toFixed(2) };
+    }
+    const dump = guardDump(G, obs, g, t?.code);
+    if (dump) ev('info', { id: pos.id, guard: 'dump' }, `🛡 GUARD big dump ${pos.id} $${pos.symbol}: ${dump.why} · ${dump.leadS}s after the first signal`);
+    if (t?.action === 'HOLD' && guardShouldAlert(G, sigs, g, obs.at)) {
+      G.alerts++; G.lastAlertAt = obs.at; for (const sg of sigs) if (!G.codesAlerted.includes(sg.code)) G.codesAlerted.push(sg.code);
+      const pnl = pos.tokens * obs.price + (pos.realizedUsd || 0) - pos.sizeUsd;
+      const sellers = Object.entries(G.sellers).slice(0, 3).map(([w]) => `https://solscan.io/account/${w}`);
+      const text = [
+        `🛡 EARLY EXIT WARNING $${pos.symbol} (${pos.id}, ${pos.strategy === 'copy' ? 'copy lane' : pos.trusted_dev ? 'insider lane, trusted-dev' : 'insider lane'})`,
+        `position: $${pos.sizeUsd.toFixed(2)} in · now ${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl).toFixed(2)} (${((pnl / pos.sizeUsd) * 100).toFixed(1)}%) · held ${Math.round((obs.at - Date.parse(pos.entryAt)) / 60000)} min`,
+        'signals (patterns, not proof):',
+        ...sigs.map((sg) => `· ${sg.code} ${sg.evidence}`),
+        `why sell now: this is what a crew exit usually looks like right before the dump. an instant sell now ≈ $${G.autoSell ? G.autoSell.proceedsUsd.toFixed(2) : 'n/a'}`,
+        ...(sellers.length ? ['wallets:', ...sellers] : []),
+        `https://dexscreener.com/solana/${pos.pb.pool}`,
+        'tap 🔴 Sell now (paper sell at that moment) or 🟢 Hold. no answer = hold. stop / trail / take-profit / time exits keep running',
+      ].join('\n');
+      notify('guard', text, { kb: [[{ text: '🔴 Sell now', callback_data: `gs:${pos.id}` }, { text: '🟢 Hold', callback_data: `gh:${pos.id}` }]] });
+      ev('info', { id: pos.id, guard: 'alert' }, `🛡 GUARD ALERT ${pos.id} $${pos.symbol}: ${sigs.map((x) => x.code).join('+')} · asked her (no auto-sell)`);
+    }
+    dirty('desk', 'pb', 'copy');
+  }
+
+  // her tap on [Sell now] / [Hold] under a guard alert
+  async function guardSell(id) {
+    const pos = st.positions.find((p) => p.id === id && p.pb) || CB.positions.find((p) => p.id === id);
+    if (!pos) return { ok: false, gone: true, error: 'that position is already closed' };
+    let obs;
+    try { obs = await observe(pos); } catch (e) { return { ok: false, error: `no live read right now (${String(e.message).slice(0, 60)}), try again` }; }
+    if (obs.poolGone) obs = { ...obs, price: pos.lastPrice, priceSol: 0, solReserve: 0 };
+    (pos.guard ||= { sellers: {}, solHist: [], log: [], alerts: 0, codesAlerted: [] }).decision = 'sold'; pos.guard.decidedAt = now();
+    const book = bookOf(pos), n0 = book.closed.length;
+    await act(pos, { code: 'G0', action: 'SELL_ALL', fraction: 1, reason: 'early-exit guard: you tapped Sell now' }, obs);
+    const trade = book.closed.length > n0 ? book.closed.at(-1) : null;
+    dirty('desk', 'pb', 'copy');
+    return { ok: Boolean(trade), trade, error: trade ? null : 'sell did not fill' };
+  }
+  function guardHold(id) {
+    const pos = st.positions.find((p) => p.id === id && p.pb) || CB.positions.find((p) => p.id === id);
+    if (!pos) return { ok: false, gone: true, error: 'that position is already closed' };
+    (pos.guard ||= { sellers: {}, solHist: [], log: [], alerts: 0, codesAlerted: [] }).decision = 'hold'; pos.guard.decidedAt = now();
+    ev('info', { id }, `🛡 GUARD ${id} $${pos.symbol}: you chose HOLD`);
+    dirty('desk', 'pb', 'copy');
+    return { ok: true, pos };
+  }
 
   async function killAll(reason) {
     for (const pos of [...st.positions]) {
@@ -495,8 +631,9 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       const isCopy = pos.strategy === 'copy';
       let obs;
       try { obs = await observe(pos); } catch (e) { ev('warn', {}, `insider monitor: ${String(e.message).slice(0, 80)}`); continue; }
+      let added = 0;
       if (!obs.poolGone) {
-        await followSplits(pos, obs).catch(() => 0);
+        added = await followSplits(pos, obs).catch(() => 0);
         pos.lastPrice = obs.price; pos.markUsd = pos.tokens * obs.price; pos.lastCheckAt = obs.at;
         pos.peakPrice = Math.max(pos.peakPrice, obs.price); pos.stopPrice = Math.max(pos.stopPrice, pos.peakPrice * (1 - cfg.trailing_stop_pct / 100));
       }
@@ -507,8 +644,9 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
         const n = smartExited(C, pos.mint, pos.copy.wallets), need = Math.ceil(pos.copy.wallets.length / 2);
         if (n >= need) t = { code: 'C1', action: 'SELL_ALL', fraction: 1, reason: `${n} of the ${pos.copy.wallets.length} smart wallets we copied sold half or more` };
       }
+      if (!obs.poolGone && guardCfg(cfg).enabled !== false) { try { guardLook(pos, obs, added, t); } catch (e) { ev('warn', {}, `guard: ${String(e.message).slice(0, 80)}`); } }
       if (!obs.poolGone) { pos.pb.lastBal = obs.bal; pos.pb.shareHist.push([obs.at, obs.clusterShare]); pos.pb.shareHist = pos.pb.shareHist.filter(([x]) => x >= obs.at - 330_000); }
-      if (t.warn && pos.pb.warned < 3 && !t.code) {
+      if (t.warn && pos.pb.warned < 3 && !t.code && !(pos.guard?.lastAlertAt && now() - pos.guard.lastAlertAt < 120_000)) {
         const lvl = Math.floor(parseFloat(t.warn.match(/[\d.]+/)?.[0] || 0) / 5);
         if (lvl > (pos.pb.warnLvl ?? -1)) { pos.pb.warnLvl = lvl; pos.pb.warned++; notify('pb_warn', signalText({ type: 'WARNING', alertId: `A${String(++P.alertSeq).padStart(4, '0')}`, entryAlertId: pos.pb.alertId, at: now(), symbol: pos.symbol, name: pos.symbol, mint: pos.mint, pool: pos.pb.pool, priceSol: obs.priceSol, priceUsd: obs.price, liqUsd: obs.solReserve * 2 * solUsd, clusterWallets: pos.pb.members.length, clusterShare: obs.clusterShare, clusterChange5m: change5m(pos, obs), note: t.warn })); }
       }
@@ -561,6 +699,21 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     return evaluate({ trades, curve: S.curve || [], book: S.labels, latenciesMs: P.latency, killSwitchDays: { hit: kd.filter((x) => x.hit).length, fired: kd.filter((x) => x.fired).length }, days }, cfg);
   }
 
+  // Oct 31 additions: trusted-dev sub-line (its trades are IN the numbers above), dev history, early-exit guard, quiet crew alerts
+  function extraLines() {
+    const tr = st.closed.filter((t) => t.strategy === 'insider' && t.trusted_dev);
+    const tp = tr.reduce((s2, t) => s2 + t.pnlUsd, 0), tw = tr.filter((t) => t.pnlUsd > 0).length;
+    const ref = Object.entries(P.trusted.refused || {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
+    const D = P.devStats || {}, bv = Object.entries(D.byVerdict || {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'none yet';
+    const gs = guardSummary([...st.closed, ...CB.closed]);
+    const q = P.alerts.quiet || {};
+    return [
+      `🤝 of which trusted-dev exception: ${tr.length} trades · win ${tr.length ? Math.round((tw / tr.length) * 100) : 'n/a'}% · pnl ${tp >= 0 ? '+' : '-'}$${Math.abs(tp).toFixed(2)} · open ${st.positions.filter((x) => x.trusted_dev).length} · checked ${P.trusted.checked} · refused: ${ref}`,
+      `🔎 dev history: ${D.lookups || 0} lookups today (~${D.credits || 0} credits) · ${D.hits || 0} cache hits · verdicts: ${bv}`,
+      `🛡 early-exit guard: ${gs ? `${gs.trades} trades warned · you sold on ${gs.soldOnTap} · median lead ${gs.leadMedianS ?? 'n/a'}s before the dump · instant-sell minus actual ${gs.autoMinusActualUsd == null ? 'n/a' : `${gs.autoMinusActualUsd >= 0 ? '+' : '-'}$${Math.abs(gs.autoMinusActualUsd).toFixed(2)}`}` : 'no warnings yet'}`,
+      `🔕 crew moves on coins not held (logged, not sent): loading ${q.buy || 0} · dumping ${q.dump || 0}`,
+    ];
+  }
   function reportLines() {
     const sk = Object.entries(P.skips).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
     const ls = labelSummary(S.labels);
@@ -573,12 +726,13 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       `labels (skipped): ${fmt(ls.skipped)} · (traded): ${fmt(ls.traded)} · filter value ${ls.filterValuePct ?? 'n/a'}% of skips later RUG`,
       `trades ${m.trades} · win ${m.winRatePct ?? 'n/a'}% · avg ${m.avgPnlPct ?? 'n/a'}% · max DD ${m.maxDrawdownPct}% · rug-exit ${m.rugExitRatePct ?? 'n/a'}% · latency median ${m.latencyMedianMs ?? 'n/a'} ms`,
       `go/no-go for real money: ${m.go ? 'GO' : 'NO-GO'} (${m.goNoGo.filter((x) => x.pass).length}/6 bars)`,
+      ...extraLines(),
     ];
   }
 
   return {
     discover, buildStep, monitor, labelsStep, metrics, reportLines, killAll, observe, state: P,
-    onSmartTx, setSmartList, copyLines, copyMetrics, alertsStep, crewAlert,
+    onSmartTx, setSmartList, copyLines, copyMetrics, alertsStep, crewAlert, devHistory, guardSell, guardHold,
     alertsDue: () => Object.keys(P.alerts.watch).length > 0 && now() >= P.timers.nextAlerts,
     monitorDue: () => (insiderOpen().length > 0 || copyOpen().length > 0) && now() >= P.timers.nextMonitor,
     buildDue: () => Boolean(P.build || P.queue.length || (ccfg().enabled && P.copyQueue.length)),

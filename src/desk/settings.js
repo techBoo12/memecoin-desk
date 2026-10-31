@@ -36,7 +36,13 @@ export const SETTINGS = {
   pbhold:      { path: 'playbook.max_hold_minutes', min: 10, max: 240, int: true, unit: 'm', label: 'insider lane: max hold (E8)' },
   pbsize:      { path: 'playbook.max_position_pct', min: 0.5, max: 5, unit: '%', label: 'insider lane: size, % of equity' },
   // Oct 31 (her "both"): insider alerts + the smart-wallet copy lane (paper, own book)
-  insideralerts: { path: 'playbook.alerts.enabled', bool: true, label: 'insider alerts: dev crew loading / dumping a fresh coin (max a few per hour)' },
+  insideralerts: { path: 'playbook.alerts.enabled', bool: true, label: 'insider alerts: dev crew dumping a coin you HOLD (crews on skipped coins are logged quietly, never sent)' },
+  // Oct 31 (her voice note 9:23 AM): dev history + the trusted-dev exception (crew over the cap, clean dev -> quarter size)
+  devhistory:  { path: 'playbook.dev_history.enabled', bool: true, label: "dev history check (the dev + funder's earlier launches) on/off" },
+  skiprugger:  { path: 'playbook.dev_history.skip_serial_rugger', bool: true, label: 'never buy a coin whose dev is a serial rugger (even under the crew cap) on/off' },
+  trusteddev:  { path: 'playbook.trusted_dev.enabled', bool: true, label: 'trusted-dev exception: crew over the cap but dev history clean -> quarter-size buy on/off' },
+  guard:       { path: 'playbook.guard.enabled', bool: true, label: 'early-exit guard: warn you with [Sell now] [Hold] when a crew exit starts on a coin you hold (never sells by itself) on/off' },
+  trustedcap:  { path: 'playbook.trusted_dev.max_crew_pct', min: 20, max: 80, int: true, unit: '%', label: 'trusted-dev exception: hard cap on the dev crew %' },
   copyon:      { path: 'playbook.copy.enabled', bool: true, label: 'copy lane: paper-buy when smart wallets pile into a fresh coin (own book) on/off' },
   copyk:       { path: 'playbook.copy.min_wallets', min: 2, max: 6, int: true, label: 'copy lane: how many smart wallets must buy within the window' },
   // day 6: Meteora discovery for the desk + the hype lane

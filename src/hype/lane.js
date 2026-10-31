@@ -18,6 +18,7 @@ import { honeypotCheck } from '../desk/honeypot.js';
 import { openPaper, sellPaper, markPrice } from '../desk/executor.js';
 import { manage } from '../desk/risk.js';
 import { getJSON } from '../lib/http.js';
+import { buyCard } from '../telegram/buycard.js';
 
 const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const n = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0);
@@ -129,6 +130,7 @@ export function createHypeLane({ config, S, now = () => Date.now(), log = consol
   S.hype ||= newHypeState(cfg);
   const H = S.hype;
   const D = hypeDeskConfig(config);
+  const devHistory = io.devHistory || null; // Oct 31: the insider lane's dev-history check (cached, budgeted), when the worker wires it
   const pairs = io.pairs || refreshPairs, rugcheck = io.rugcheck || ((m) => rugcheckReport(m, 60_000)), jup = io.jupToken || jupToken, honeypot = io.honeypot || honeypotCheck, mark = io.markPrice || markPrice;
   const ev = (line) => log(line);
   const remember = (x) => { H.recent.unshift({ at: now(), ...x }); H.recent.length = Math.min(H.recent.length, 40); };
@@ -173,13 +175,24 @@ export function createHypeLane({ config, S, now = () => Date.now(), log = consol
     if (!hp.ok) { skip(it, hp.unknown ? 'H9' : 'H10', hp.reason); return 'hype_skip'; }
     const sizeUsd = +Math.min(cfg.position_usd * v.sizeFrac, H.book.cash).toFixed(2);
     if (sizeUsd < 0.5) { skip(it, 'H11', `hype book cash ${usd(H.book.cash)} too low`); return 'hype_skip'; }
+    // Oct 31: dev history (creator from the rugcheck report): a serial rugger is skipped; the verdict rides the buy card
+    let devHist = null;
+    if (devHistory && rc?.creator) {
+      try { devHist = await devHistory({ mint: it.mint, dev: rc.creator, funder: null, symbol: it.symbol }); } catch { devHist = null; }
+      if (devHist?.verdict === 'serial_rugger') { skip(it, 'H12', `dev history: serial rugger (${devHist.why}) · evidence, not proof`); return 'hype_skip'; }
+    }
     const pos = openPaper(H.book, c, { score: it.score }, hp, { sizeUsd, riskUsd: +(sizeUsd * cfg.stop_loss_pct / 100).toFixed(4) }, D);
     pos.id = `H${String(H.book.closed.length + H.book.positions.length).padStart(3, '0')}`;
     Object.assign(pos, { lane: 'hype', strategy: 'hype', bigName: !!v.bigName, why: it.why.slice(0, 3), entryLiq: c.liqUsd, rule: v.note });
     H.stats.entered++; if (v.bigName) H.stats.bigName++;
     remember({ sym: it.symbol, mint: it.mint, d: v.bigName ? 'BUY (big-name exception)' : 'BUY', note: `${usd(sizeUsd)} · hype ${it.score} · ${v.note}`.slice(0, 200) });
     ev(`▲ HYPE PAPER BUY ${pos.id} $${it.symbol} ${usd(sizeUsd)} @ ${hp.fillPriceUsd} · hype ${it.score} · ${v.note} · why: ${it.why.join(' | ').slice(0, 200)}`);
-    notify('buy', `🔥 hype lane paper buy $${it.symbol} ${usd(sizeUsd)}${v.bigName ? ' (big-name exception, quarter size)' : ''}\nwhy: ${it.why.slice(0, 2).join(' · ').slice(0, 220)}\n${c.url || ''}`);
+    if (devHist) pos.devHist = { verdict: devHist.verdict, why: devHist.why, counts: devHist.counts };
+    const cc = concentration(rc);
+    notify('buy', buyCard({ lane: 'hype', symbol: it.symbol, mint: it.mint, pool: c.pairAddress || null, sizeUsd: pos.sizeUsd, entryPrice: pos.entryPrice, liqUsd: c.liqUsd, mcapUsd: c.mcap,
+      crew: { pct: cc.insider, source: 'linked/insider wallets, rugcheck proxy' }, devPct: cc.dev, devHist,
+      passed: [`liq ${usd(c.liqUsd)}`, 'mint/freeze revoked', `sell test ok${hp.roundTripLossPct != null ? ` -${hp.roundTripLossPct}%` : ''}`, ...(cc.top10 != null ? [`top10 ${cc.top10}%`] : [])],
+      why: `${v.bigName ? 'big-name exception, quarter size (logged BIG-NAME EXCEPTION) · ' : ''}hype score ${it.score}: ${it.why.slice(0, 2).join(' · ').slice(0, 200)}` }));
     dirty('hype');
     return v.bigName ? 'hype_buy_big' : 'hype_buy';
   }

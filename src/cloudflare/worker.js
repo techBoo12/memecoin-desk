@@ -67,18 +67,18 @@ export class Desk extends DurableObject {
   // bound to this.S, so it is rebuilt whenever this.S is (load, init)
   makeHype() {
     const S = this.S;
-    this.hype = this.config.hype ? createHypeLane({ config: this.config, S, log: (l) => console.log(l), notify: (k, t, o) => this.notify(k, t, o), dirty: (k) => S._dirty?.add(k) }) : null;
+    this.hype = this.config.hype ? createHypeLane({ config: this.config, S, log: (l) => console.log(l), notify: (k, t, o) => this.notify(k, t, o), dirty: (k) => S._dirty?.add(k), io: { devHistory: (a) => (this.engine?.pb ? this.engine.pb.devHistory(a) : null) } }) : null;
     if (this.hype) Object.defineProperty(S, 'hypeLines', { value: () => this.hype.lines(), enumerable: false, configurable: true });
   }
 
-  notify(kind, text, { dedupeKey, dedupeMs = 30 * 60_000 } = {}) {
+  notify(kind, text, { dedupeKey, dedupeMs = 30 * 60_000, kb = null } = {}) {
     if (dedupeKey) {
       const last = this.dedupe.get(dedupeKey);
       if (last && Date.now() - last < dedupeMs) return false;
       this.dedupe.set(dedupeKey, Date.now());
     }
     if (!alert.alertAllowed(kind, this.config)) return false;
-    this.outbox.push({ kind, text, at: Date.now() });
+    this.outbox.push({ kind, text, at: Date.now(), ...(kb ? { kb } : {}) }); // kb: inline buttons (Oct 31: the guard's [Sell now] [Hold])
     if (this.outbox.length > 60) this.outbox.splice(0, this.outbox.length - 60); // never let a backlog grow
     this.outboxDirty = true;
     return true;
@@ -91,7 +91,7 @@ export class Desk extends DurableObject {
     while (this.outbox.length && sent < max) {
       const m = this.outbox[0];
       try {
-        for (const chat of to) await this.client.sendMessage(chat, m.text);
+        for (const chat of to) await this.client.sendMessage(chat, m.text, m.kb && chat === this.lock.ownerChatId ? { reply_markup: { inline_keyboard: m.kb } } : {});
       } catch (e) {
         if (e.retryAfter) break; // telegram asked us to slow down: try next tick
         console.log('telegram send failed: ' + this.client.redact(e.message));
@@ -159,6 +159,13 @@ export class Desk extends DurableObject {
     }
     if (url.pathname === '/admin/hype') return json({ lines: this.S.hypeLines ? this.S.hypeLines() : [], hype: this.S.hype || null });
     if (url.pathname === '/dash') return json(dashData(this.S, this.config, this.health()));
+    if (url.pathname === '/admin/devhist') { // Oct 31: one dev-history lookup on demand (admin key checked outside; cached + budgeted like the lane's)
+      if (!this.engine.pb) return json({ ok: false, error: 'lane off' }, 409);
+      const q = url.searchParams, t0 = Date.now();
+      const h = await this.engine.pb.devHistory({ mint: q.get('mint') || '', dev: q.get('dev') || '', funder: q.get('funder') || null, symbol: q.get('symbol') || null });
+      await this.save();
+      return json({ ok: true, ms: Date.now() - t0, h });
+    }
     if (url.pathname === '/admin/state') return json({ S: { ...this.S, _dirty: undefined }, outbox: this.outbox.length, sent: this.sentLog || [], config: this.config });
     return json(this.health());
   }
@@ -290,6 +297,23 @@ export class Desk extends DurableObject {
       sell: async (id, pct) => {
         const r = await manualSell(this.S, id, pct, this.config);
         if (r.ok) { this.S._dirty.add('desk'); this.engine.event?.('sell', `▼ PAPER SELL ${id} ${pct}% MANUAL (you)${r.trade ? ` · closed ${r.trade.pnlUsd >= 0 ? '+' : '-'}$${Math.abs(r.trade.pnlUsd).toFixed(2)}` : ''}`); }
+        return r;
+      },
+      // Oct 31: her answer under an early-exit guard alert (sell only on her tap)
+      guardSell: async (id) => {
+        const pos = this.S.desk.positions.find((p) => p.id === id);
+        let r;
+        if (this.engine.pb && (pos?.pb || this.S.copy?.book?.positions?.some((p) => p.id === id))) r = await this.engine.pb.guardSell(id);
+        else { if (pos) { (pos.guard ||= { sellers: {}, solHist: [], log: [], alerts: 0, codesAlerted: [] }).decision = 'sold'; pos.guard.decidedAt = Date.now(); } r = await manualSell(this.S, id, 100, this.config); }
+        if (r.ok) { this.S._dirty.add('desk'); this.S._dirty.add('copy'); this.engine.event?.('sell', `▼ PAPER SELL ${id} 100% · early-exit guard: she tapped Sell now${r.trade ? ` · closed ${r.trade.pnlUsd >= 0 ? '+' : '-'}$${Math.abs(r.trade.pnlUsd).toFixed(2)}` : ''}`); await this.save(); }
+        return r;
+      },
+      guardHold: async (id) => {
+        const dp = this.S.desk.positions.find((p) => p.id === id && !p.pb);
+        let r;
+        if (dp) { (dp.guard ||= { sellers: {}, solHist: [], log: [], alerts: 0, codesAlerted: [] }).decision = 'hold'; dp.guard.decidedAt = Date.now(); this.S._dirty.add('desk'); r = { ok: true }; }
+        else r = this.engine.pb ? this.engine.pb.guardHold(id) : { ok: false, error: 'lane off' };
+        if (r.ok) await this.save();
         return r;
       },
       refresh: async (id) => {

@@ -11,6 +11,7 @@
 import { scout } from './scout.js';
 import { filter, usd } from './filter.js';
 import { honeypotCheck } from './honeypot.js';
+import { guardCfg, deskGuardSignals, guardShouldAlert, guardTradeRecord } from '../playbook/guard.js';
 import { analyze } from './analyst.js';
 import { qualityGate } from './quality.js';
 import { newState, riskStatus, sizeTrade, manage, afterClose, equity } from './risk.js';
@@ -206,6 +207,17 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
       nearMiss(c, byGate ? 'quality' : 'head', byGate ? q.failed : [{ id: 'head', note: verdict.reason }, ...q.failed], nmBase);
       return;
     }
+    // Oct 31 (her ask): the dev's earlier launches, for the buy card, and one more skip: a SERIAL RUGGER is never bought
+    let devHist = null;
+    if (pb && f.rc?.creator) {
+      try { devHist = await pb.devHistory({ mint: c.mint, dev: f.rc.creator, funder: null, symbol: c.symbol }); } catch { devHist = null; }
+      if (devHist?.verdict === 'serial_rugger' && config.playbook?.dev_history?.skip_serial_rugger !== false) {
+        run.vetoes++;
+        ev('no_trade', { mint: c.mint, symbol: c.symbol, reason: 'serial rugger' }, `○ NO TRADE ${sym(c)} dev history: serial rugger (${devHist.why}) · evidence, not proof`);
+        nearMiss(c, 'head', [{ id: 'dev_history', note: `dev history: serial rugger (${devHist.why})` }], nmBase);
+        return;
+      }
+    }
     run.approved++;
     const pos = openPaper(st, c, a, hp, size, config);
     pos.entryLiq = c.liqUsd;
@@ -219,11 +231,39 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
       buys: `1h ${c.txns.h1.buys}/${c.txns.h1.buys + c.txns.h1.sells} · 5m ${c.txns.m5.buys}/${c.txns.m5.buys + c.txns.m5.sells}`,
       holders: `${a.holders}${a.holderGrowthPerHourPct != null ? ` (+${a.holderGrowthPerHourPct}%/h)` : ''}`,
       mcap: c.mcap, liq: c.liqUsd, ageMin: c.ageMin,
+      crewPct: parseFloat(f.results.find((r) => r.id === 'bundled')?.value) || null, devPct: parseFloat(f.results.find((r) => r.id === 'dev')?.value) ?? null,
+      dev: devHist ? `${devHist.verdict}: ${devHist.why}` : 'not checked (no creator in the rugcheck report)', pool: c.pairAddress || null,
     };
+    if (devHist) pos.devHist = { verdict: devHist.verdict, why: devHist.why, counts: devHist.counts, evidence: (devHist.evidence || []).slice(0, 3) };
     ev('buy', { pos }, `▲ PAPER BUY ${pos.id} ${sym(c)} $${pos.sizeUsd.toFixed(2)} @ $${sp(pos.entryPrice)} · stop $${sp(pos.stopPrice)} (-${config.risk.stopLossPct}%) · WHY: score ${a.score} [${Object.entries(a.parts).map(([k, v]) => `${k} ${v}`).join(', ')}] · quality ${q.passedCount}/${q.total} · ${verdict.reason}`);
     log.trade?.({ time: pos.entryAt, id: pos.id, side: 'BUY', symbol: pos.symbol, mint: pos.mint, price: pos.entryPrice, usd: pos.sizeUsd, qty: pos.tokens, reason: `score ${a.score}; ${pos.why.quality.join('; ')}; ${pos.why.sellTest}` });
     notify('buy', alert.buyAlert(pos, config));
     S.timers.nextWatch = now();
+    dirty('desk');
+  }
+
+  // Oct 31 early-exit guard on main-desk positions: ASK her (buttons), never sell on its own
+  function deskGuard(pos, liqNow, price) {
+    const g = guardCfg(config.playbook || {});
+    const sigs = deskGuardSignals(pos, liqNow, now(), g);
+    const G = pos.guard;
+    for (const sg of sigs) if (!G.log.some((x) => x.code === sg.code)) { G.log.push(sg); ev('info', { id: pos.id, guard: sg.code }, `🛡 GUARD ${sg.code} ${pos.id} $${pos.symbol}: ${sg.evidence}`); }
+    if (sigs.length && !G.firstSignalAt && price > 0) {
+      G.firstSignalAt = now(); G.priceAtSignal = price;
+      const net = pos.tokens * price * (1 - config.risk.paperFeePct / 100);
+      G.autoSell = { at: now(), price, proceedsUsd: +net.toFixed(4), pnlUsd: +(net + (pos.realizedUsd || 0) - pos.sizeUsd).toFixed(2) };
+    }
+    if (G.firstSignalAt && !G.dumpAt && price > 0 && G.priceAtSignal > 0 && price <= G.priceAtSignal * (1 - g.dump_price_drop_pct / 100)) { G.dumpAt = now(); G.dumpWhy = `price -${g.dump_price_drop_pct}% from the first signal`; }
+    if (!guardShouldAlert(G, sigs, g, now())) return;
+    G.alerts++; G.lastAlertAt = now(); for (const sg of sigs) if (!G.codesAlerted.includes(sg.code)) G.codesAlerted.push(sg.code);
+    const pnl = pos.tokens * (price || pos.lastPrice) + (pos.realizedUsd || 0) - pos.sizeUsd;
+    notify('guard', [`🛡 EARLY EXIT WARNING $${pos.symbol} (${pos.id}, main desk)`,
+      `position: $${pos.sizeUsd.toFixed(2)} in · now ${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl).toFixed(2)} (${((pnl / pos.sizeUsd) * 100).toFixed(1)}%)`,
+      'signal (pattern, not proof):', ...sigs.map((sg) => `· ${sg.code} ${sg.evidence}`),
+      `why sell now: liquidity leaving this fast is how pulls and big dumps start. an instant sell now ≈ $${G.autoSell ? G.autoSell.proceedsUsd.toFixed(2) : 'n/a'}`,
+      `https://dexscreener.com/solana/${pos.why?.pool || pos.mint}`,
+      'tap 🔴 Sell now (paper sell at that moment) or 🟢 Hold. no answer = hold. stop / trail / 40% liquidity emergency exit keep running'].join('\n'),
+    { kb: [[{ text: '🔴 Sell now', callback_data: `gs:${pos.id}` }, { text: '🟢 Hold', callback_data: `gh:${pos.id}` }]] });
     dirty('desk');
   }
 
@@ -243,6 +283,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
       if (lq) pos.liqNow = lq.liq;
       pos.lastCheckAt = now();
       const emergency = lq ? liquidityAlarm(pos, lq.liq, config.exits) : null;
+      if (lq && !emergency && config.playbook?.guard?.enabled !== false) deskGuard(pos, lq.liq, px?.price ?? pos.lastPrice);
       const before = pos.stopPrice;
       let acts;
       if (emergency) acts = [{ type: 'exit', fraction: 1, reason: emergency, kind: 'emergency' }];
@@ -264,6 +305,7 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
         log.trade?.({ time: fill.at, id: pos.id, side: 'SELL', symbol: pos.symbol, mint: pos.mint, price: fillPrice, usd: fill.proceeds, qty: fill.qty, reason: act.reason, pnl: trade?.pnlUsd, R: trade?.R });
         if (trade) {
           trade.exit = detail; trade.why = pos.why;
+          if (pos.guard?.firstSignalAt) { if (!pos.guard.dumpAt && kind === 'emergency') { pos.guard.dumpAt = now(); pos.guard.dumpWhy = 'emergency exit fired'; } trade.guard = guardTradeRecord(pos.guard, trade); }
           ev('sell', { trade }, `▼ PAPER SELL ${trade.id} $${pad(trade.symbol, 9)} ${trade.pnlUsd >= 0 ? '+' : '-'}$${Math.abs(trade.pnlUsd).toFixed(2)} (${trade.pnlPct >= 0 ? '+' : ''}${trade.pnlPct}%, ${trade.R >= 0 ? '+' : ''}${trade.R}R) · WHY: ${act.reason} · trigger $${sp(trigger)} (${detail.triggerSource}) · fill $${sp(fillPrice)} (${detail.fillSource})${detail.slipVsStopPct != null ? ` · ${detail.slipVsStopPct}% vs stop` : ''} · peak +${detail.peakPct}%`);
           notify(kind === 'emergency' ? 'emergency' : (kind === 'stop' && trade.pnlUsd < 0) ? 'stop_out' : 'sell', alert.sellAlert(trade));
           const ac = afterClose(st, trade, config);

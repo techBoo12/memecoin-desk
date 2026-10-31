@@ -322,7 +322,11 @@ test('lane: detects, traces, passes R1-R16, paper-buys with an R18 ENTRY alert',
   const p = S.desk.positions[0];
   assert.ok(p, `no buy: ${JSON.stringify(S.pb.recent[0])}`);
   assert.equal(p.strategy, 'insider'); assert.ok(p.sizeUsd > 1.9 && p.sizeUsd < 2.1, `size ${p.sizeUsd}`);
-  assert.equal(sent.find(([k]) => k === 'buy')[1].split('\n')[0].startsWith('ENTRY · A0001'), true);
+  const card = sent.find(([k]) => k === 'buy')[1];
+  assert.match(card.split('\n')[0], /PAPER BUY · insider lane \(counts in your 14-day test\)/);
+  assert.match(card, /dev crew: \d+ linked wallets hold \d+\.\d%/); assert.match(card, /dev history: /); assert.match(card, /rules passed: R1/); assert.match(card, /why: fresh pump\.fun graduate/);
+  assert.match(card, /dexscreener\.com\/solana\//);
+  assert.ok(card.split('\n').some((l) => l.startsWith('ENTRY · A0001')), 'the R18 entry record rides under the card');
   assert.ok(Object.values(S.labels.items)[0].d === 'traded');
 });
 

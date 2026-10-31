@@ -236,7 +236,7 @@ export function createMenu({ io, desk, ui, ownerId, now = () => Date.now() }) {
     const msgId = cq.message?.message_id;
     const [cmd, a1, a2] = String(cq.data || '').split(':');
     const d = desk.snapshot();
-    const lockKey = cmd === 'ps' || cmd === 'pr' ? `pos:${a1}` : ['ba', 'bf', 'bk'].includes(cmd) ? `ck:${a1}` : null;
+    const lockKey = cmd === 'ps' || cmd === 'pr' || cmd === 'gs' || cmd === 'gh' ? `pos:${a1}` : ['ba', 'bf', 'bk'].includes(cmd) ? `ck:${a1}` : null;
     if (lockKey && busy.has(lockKey)) { await io.answer(cq.id, 'on it, one sec ⏳'); return 'busy'; }
     if (lockKey) busy.add(lockKey);
     try {
@@ -269,6 +269,21 @@ export function createMenu({ io, desk, ui, ownerId, now = () => Date.now() }) {
           await desk.save();
           if (r.trade) await show(msgId, closedView(r.trade));
           else await show(msgId, positionCardView(r.pos, d.config, `✅ sold ${pct}% @ $${sp(r.price)} for $${r.fill.proceeds.toFixed(2)} (${esc(r.source)})`));
+          break;
+        }
+        case 'gs': { // Oct 31: [Sell now] under an early-exit guard alert: paper sell 100% at this moment
+          if (!desk.guardSell) { await io.answer(cq.id, 'not available'); break; }
+          await io.answer(cq.id, 'selling 100% at a live quote…');
+          const r = await desk.guardSell(a1);
+          if (!r.ok) { await io.send(`❌ ${esc(r.error || 'sell failed')}`); break; }
+          const tr = r.trade;
+          await io.send(tr ? `✅ sold $${esc(tr.symbol)} (${esc(a1)}) on your tap: ${tr.pnlUsd >= 0 ? '+' : '-'}$${Math.abs(tr.pnlUsd).toFixed(2)} (${tr.pnlPct}%) · paper` : `✅ sold ${esc(a1)} (paper)`);
+          break;
+        }
+        case 'gh': {
+          if (!desk.guardHold) { await io.answer(cq.id, 'not available'); break; }
+          const r = await desk.guardHold(a1);
+          await io.answer(cq.id, r.ok ? '🟢 holding. the normal exits keep running' : (r.error || 'closed'));
           break;
         }
         case 'nm': await io.answer(cq.id); await show(msgId, textView('👀 <b>near misses</b>', nearMissText(d.S), 'nm')); break;

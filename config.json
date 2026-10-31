@@ -251,6 +251,53 @@
       "max_open": 3,
       "exit_on_smart_sell": true,
       "hook_budget_day": 2500
+    },
+    "dev_history": {
+      "_note": "Oct 31 (her voice note 9:23 AM Lagos): the dev + its funder's earlier pump.fun launches (last `days`), each judged rug/died/survived/too new. Evidence, not proof: a fresh wallet is UNKNOWN, never clean. Runs only for coins about to be bought (or trusted-dev candidates). Helius getTransactionsForAddress = 10 credits a read, max_calls reads a lookup, cached per dev. Guesses, tune by use.",
+      "enabled": true,
+      "skip_serial_rugger": true,
+      "days": 45,
+      "pages_dev": 2,
+      "pages_funder": 1,
+      "funder_page": 50,
+      "max_siblings": 3,
+      "sibling_page": 40,
+      "max_calls": 7,
+      "max_tokens_judged": 20,
+      "dump_sold_pct": 80,
+      "dump_hours": 6,
+      "survive_min_liq_usd": 10000,
+      "survive_min_mcap_usd": 30000,
+      "judge_min_age_h": 24,
+      "dead_max_liq_usd": 2000,
+      "clean_min_survived": 2,
+      "clean_min_survival_rate": 0.34,
+      "rugger_min_rugs": 2,
+      "rugger_min_rug_rate": 0.5,
+      "cache_hours": 6,
+      "max_lookups_day": 60
+    },
+    "trusted_dev": {
+      "_note": "Oct 31 (her voice note 9:23 AM + 'cant we add it to the 14days test' 9:25 AM): crew over max_cluster_share_pct but <= max_crew_pct, top 10 WITHOUT the crew still under max_top10_pct, every other rule passes, dev history CLEAN -> paper buy at size_frac of the normal size, strategy insider (counts in the 14-day test), tagged trusted_dev. Logged TRUSTED-DEV EXCEPTION.",
+      "enabled": true,
+      "max_crew_pct": 60,
+      "size_frac": 0.25
+    },
+    "guard": {
+      "_note": "Oct 31 (her asks 9:26 + 9:29 AM): early-exit guard on HELD positions. Signals G1 2+ linked wallets sell inside 60 s, G2 crew share -2 pts inside 120 s, G3 crew moves tokens to brand-new wallets, G5 pool SOL -15% inside 60 s (main desk: pool liquidity -15% inside 120 s). It ASKS her with [Sell now] [Hold] and sells only on her tap; no answer = hold. The pack's exits E1-E8 (and the desk's stop/trail/40% liquidity emergency) still act on their own. Every trade records the first signal, the instant-sell value then, her choice, the lead time to the big dump and the actual result. Guesses, tune by use.",
+      "enabled": true,
+      "crew_sellers": 2,
+      "crew_sell_window_s": 60,
+      "fast_drop_pts": 2,
+      "fast_drop_window_s": 120,
+      "sol_drop_pct": 15,
+      "sol_drop_window_s": 60,
+      "desk_liq_drop_pct": 15,
+      "desk_liq_window_s": 120,
+      "realert_min": 10,
+      "dump_crew_drop_pts": 10,
+      "dump_price_drop_pct": 30,
+      "max_alerts_per_trade": 3
     }
   },
   "hype": {

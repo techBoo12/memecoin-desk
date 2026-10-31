@@ -121,36 +121,43 @@ function boot({ over = {}, copy = {}, alerts = {}, insider = true } = {}) {
   return { ch, S, eng, sent, config, now: () => t, adv: (ms) => { t += ms; }, ticks: async (n, ms = 300) => { for (let i = 0; i < n; i++) { await eng.tick({ pbBudget: 8 }); t += ms; } } };
 }
 
-test('insider alert: a dev crew over the threshold sends ONE concise alert (coin, mint short, %, dexscreener link); dedupe per coin', async () => {
+test('insider alert (Oct 31 change): a dev crew loading a coin is logged QUIETLY, never sent; the buy card carries the crew + dev history', async () => {
   const B = boot({ alerts: { crew_buy_pct: 10 } });
   await B.ticks(40);
-  const al = B.sent.filter(([k]) => k === 'insider_alert');
-  assert.equal(al.length, 1, JSON.stringify(B.S.pb.recent[0]));
-  const txt = al[0][1];
-  assert.match(txt, /^🚨 dev crew loading \$/); assert.match(txt, /hold \d+\.\d% of supply/); assert.match(txt, new RegExp(`dexscreener\\.com/solana/${A.POOL}`)); assert.match(txt, /not proof/);
-  assert.ok(txt.split('\n').length <= 5);
-  assert.equal(B.eng.pb.crewAlert('buy', { mint: A.MINT, pool: A.POOL, symbol: 'X', share: 30, wallets: 5 }), false, 'same coin, same event: deduped');
+  assert.equal(B.sent.filter(([k]) => k === 'insider_alert').length, 0, 'no loading alert');
+  assert.equal(B.S.pb.alerts.quiet.buy, 1, 'but it was detected and counted');
+  const card = B.sent.find(([k]) => k === 'buy')?.[1] || '';
+  assert.match(card, /dev crew: \d+ linked wallets hold/); assert.match(card, /dev history: /);
+  assert.equal(B.eng.pb.crewAlert('buy', { mint: 'zzz', pool: 'p', symbol: 'X', share: 30, wallets: 5 }), false, 'loading never alerts');
 });
 
-test('insider alert: the crew dumping fires once; hourly cap holds back the rest; /alerts off silences', async () => {
+test('insider alert: a crew dumping a coin she does NOT hold is quiet; a coin she HOLDS alerts once; hourly cap; /alerts off silences', async () => {
   const B = boot({ alerts: { crew_buy_pct: 10, watch_min_pct: 5 } });
   await B.ticks(40);
+  assert.equal(B.S.desk.positions.length, 1, 'the test coin was bought (held)');
   assert.equal(Object.keys(B.S.pb.alerts.watch).length, 1);
   for (const k of Object.keys(B.ch.S.bal)) if (k !== A.BV) B.ch.S.bal[k] = Math.floor(B.ch.S.bal[k] * 0.3); // the crew sells 70%
   B.adv(130_000);
   assert.equal(B.eng.pb.alertsDue(), true);
   await B.eng.pb.alertsStep();
   const dump = B.sent.filter(([k, t]) => k === 'insider_alert' && /dumping/.test(t));
-  assert.equal(dump.length, 1); assert.match(dump[0][1], /→/);
+  assert.equal(dump.length, 1); assert.match(dump[0][1], /→/); assert.match(dump[0][1], /you HOLD this one/);
   assert.equal(Object.keys(B.S.pb.alerts.watch).length, 0);
-  // hourly cap
+  // not held: quiet
+  const q0 = B.S.pb.alerts.quiet.dump || 0;
+  assert.equal(B.eng.pb.crewAlert('dump', { mint: 'notheld', symbol: 'N', from: 40, to: 20, mins: 3 }), false);
+  assert.equal(B.S.pb.alerts.quiet.dump, q0 + 1);
+  // hourly cap (held coins)
+  B.S.copy.book.positions.push({ mint: 'held1' }, { mint: 'held2' });
   B.config.playbook.alerts.max_per_hour = 2;
-  assert.equal(B.eng.pb.crewAlert('buy', { mint: 'other1', symbol: 'O', share: 40, wallets: 3 }), false); // 2 already this hour
+  assert.equal(B.eng.pb.crewAlert('dump', { mint: 'held1', symbol: 'H', from: 40, to: 20, mins: 3 }), true);
+  assert.equal(B.eng.pb.crewAlert('dump', { mint: 'held2', symbol: 'H', from: 40, to: 20, mins: 3 }), false); // 2 already this hour
   assert.equal(B.S.pb.alerts.suppressed, 1);
   // toggle
   const r = changeSetting(B.config, {}, 'insideralerts', 'off'); assert.equal(r.ok, true);
   B.adv(2 * 3.6e6);
-  assert.equal(B.eng.pb.crewAlert('buy', { mint: 'other2', symbol: 'O', share: 40, wallets: 3 }), false);
+  assert.equal(B.eng.pb.crewAlert('dump', { mint: 'held2', symbol: 'H', from: 40, to: 20, mins: 3 }), false);
+  B.S.copy.book.positions.length = 0;
 });
 
 test('/alerts on|off and /smart answer from the desk', async () => {
@@ -179,7 +186,7 @@ test('copy lane: 2 smart wallets buy a fresh graduate -> safety checks -> PAPER 
   assert.ok(cp, `no copy buy: ${JSON.stringify(B.S.copy.recent[0])}`);
   assert.equal(cp.strategy, 'copy'); assert.match(cp.id, /^C\d{3}$/); assert.deepEqual(cp.copy.wallets.sort(), [X1, X2].sort());
   assert.equal(B.S.desk.positions.length, 0); assert.equal(B.S.desk.cash, eqBefore, 'main desk balance untouched');
-  assert.ok(B.sent.find(([k, t]) => k === 'buy' && /COPY LANE/.test(t)));
+  assert.ok(B.sent.find(([k, t]) => k === 'buy' && /copy lane \(own \$100 book/.test(t)));
   // a third push of the same coin does not open a second copy
   assert.equal(B.eng.pb.onSmartTx(swap(X1, { mint: A.MINT, pool: A.POOL, at: B.now(), sol: -1 })), null);
   // both copied wallets sell half+ -> C1 at the next look

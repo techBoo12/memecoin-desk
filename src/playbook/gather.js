@@ -250,6 +250,8 @@ async function readState(b, io, cfg, exchanges, call, cap) {
   b.result = {
     mintInfo, lpBurnedPct, reserves, priceSol: reserves.sol / (reserves.token / 10 ** (mintInfo.decimals ?? 6)),
     holders, holdersSource, top10Pct: holders ? top10Share(Object.entries(byOwner).map(([owner, amount]) => ({ owner, amount })), supply, top10Exclude) : null,
+    // top 10 with the dev crew taken out: the trusted-dev exception judges the crew by its history, the rest of the holders still face R4
+    top10ExCrewPct: holders ? top10Share(Object.entries(byOwner).map(([owner, amount]) => ({ owner, amount })), supply, new Set([...top10Exclude, ...C.members.keys()])) : null,
     programHeldPct: holders ? programHeld.reduce((s2, [, a]) => s2 + a, 0) / Number(mintInfo.supply) * 100 : null,
     cluster: C, inp, tokenAccounts: tas, taBal, balances, entryHoldings: balances, clusterBal: Object.values(balances).reduce((s, x) => s + x, 0),
     deployerBal: balances[b.deployer] || 0, clusterPct: clusterShare(balances, C.members, supply, exclude), supply, exclude: [...exclude],
