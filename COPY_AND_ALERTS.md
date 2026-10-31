@@ -39,7 +39,7 @@ All of it goes on ONE daily ledger in the worker (`S.pb.keyed`, cap 30,000/day, 
 | what | credits/day | how it's bounded |
 |---|---|---|
 | insider lane (existing) | ~24,000 (root's figure) | the ledger cap |
-| list build (off-worker, once a day) | ~1,700-2,000 measured | `--budget` 2,500 hard stop; pushed credits are booked on the ledger |
+| list build (off-worker, once a day) | ~2,400 measured (Oct 31 08:01 UTC run) | `--budget` 2,500 hard stop; pushed credits are booked on the ledger |
 | webhook pushes | = sum of the list's txs/day (first build: see report) | builder keeps the list under 2,500/day; worker deletes the webhook for the day past `copy.hook_budget_day` (2,500) |
 | webhook create/update/delete | 100 each, ~100-200 | once a day |
 | dump re-reads (alerts) | ~50-300 typical, <= 2,200 worst | max 6 watched coins, 3 reads per 2 min, 60 min each |
@@ -52,8 +52,22 @@ Because the ledger is shared, copy + alerts spending pushes the insider lane to 
 - dump re-read: one `getMultipleAccounts` (<= 60 accounts) per watched coin, <= 3 per alarm step.
 - the heavy part (thousands of full txs, MBs of JSON) runs on Tab's box, never on the worker.
 
+## sanity + recency (Oct 31 fix)
+The first live list took "winners" like $USOE 42,385x and $USDP 8,533x: fake fund / fake dollar coins
+("United States Oil Exchange", "American Oil Trust Fund") pinned at their peak with 30-80 buys per sell and an FDV
+100-300x their liquidity. Their early buyers are most likely the team. And the 3 wallets kept had been idle 14-38 h.
+`src/playbook/smart_list.js` (builder only, the worker never loads it) now drops a winner for any of:
+stablecoin / fund lookalike ticker or name, > 1000x the migration price (`--max-peak`), FDV > 60x liquidity,
+10+ buys per sell (1000+ buys), price pinned within 2% of a 50x+ peak after 12 h, or a clone of a flagged ticker.
+A wallet must have bought or sold in the last 12 h (`--max-idle-h`): a 1-credit signature check skips idle ones before
+the 20-credit read, then its own page confirms a real trade. Up to 100 candidates are scored inside the 2,500 budget.
+Each check is a statistical red flag, not proof. First run after the fix: 25 winners flagged, 13 kept, 269 early
+buyers, 149 pre-checked (49 idle), 96 scored, 3 kept (last trades 1.3-3.4 h ago). The gate that refuses most is the
+40% win rate (48 of 96).
+
 ## run it
+Always on: GitHub Actions `.github/workflows/smart-wallets.yml`, daily 05:10 UTC (repo secrets HELIUS_RPC_URL, DESK_URL, DESK_ADMIN_KEY).
 ```
-# daily, from Tab's box (key via the vault, never printed):
+# by hand, from Tab's box (key via the vault, never printed):
 TAB_TASK_ID=<running task> ../with_helius.sh node tools/smart_wallets.mjs --days 2 --push --hook
 ```
