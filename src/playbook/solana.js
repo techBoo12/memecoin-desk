@@ -19,7 +19,10 @@ const HISTORY = ['https://solana-rpc.publicnode.com', 'https://api.mainnet-beta.
 const STATE = ['https://api.mainnet-beta.solana.com', 'https://solana-mainnet.gateway.tatum.io', 'https://solana-rpc.publicnode.com'];
 // getTokenLargestAccounts: mainnet-beta 403/429s it hard; Tatum's public gateway answered it keyless (checked Oct 31 2026)
 const LARGEST = ['https://solana-mainnet.gateway.tatum.io', 'https://api.mainnet-beta.solana.com'];
-const ARCHIVE = ['https://api.mainnet-beta.solana.com']; // only this one has the deep archive; a fallback would answer 'not found' for old txs
+// mainnet-beta has the deep archive but answers HTTP 403 to Cloudflare Workers (seen live Oct 31 2026: every insider build failed DATA);
+// publicnode is the fallback there (recent history is enough for fresh pump.fun wallets; very old txs may be missing)
+const ARCHIVE = ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com'];
+const blocked = new Map(); // url -> until: an endpoint that answered 403 is skipped for 10 min (saves a subrequest per call on the free plan)
 const HISTORY_METHODS = new Set(['getSignaturesForAddress', 'getTransaction', 'getAccountInfo', 'getSlot']);
 
 export const rpcStats = { calls: 0, errors: 0, byMethod: {} };
@@ -28,7 +31,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export function makeRpc({ archive = false, minGapMs = 0, fetchImpl = fetch } = {}) {
   let last = 0;
   return async function rpc(method, params, { timeoutMs = 12000 } = {}) {
-    const list = archive ? ARCHIVE : method === 'getTokenLargestAccounts' ? LARGEST : HISTORY_METHODS.has(method) ? HISTORY : STATE;
+    const all = archive ? ARCHIVE : method === 'getTokenLargestAccounts' ? LARGEST : HISTORY_METHODS.has(method) ? HISTORY : STATE;
+    const open = all.filter((u) => !(blocked.get(u) > Date.now()));
+    const list = open.length ? open : all;
     let err;
     for (let attempt = 0; attempt < (archive ? 6 : 2); attempt++) {
       for (const url of list) {
@@ -36,7 +41,7 @@ export function makeRpc({ archive = false, minGapMs = 0, fetchImpl = fetch } = {
         rpcStats.calls++; rpcStats.byMethod[method] = (rpcStats.byMethod[method] || 0) + 1;
         try {
           const res = await fetchImpl(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout(timeoutMs) });
-          if (!res.ok) { err = `HTTP ${res.status}`; continue; }
+          if (!res.ok) { err = `HTTP ${res.status}`; if (res.status === 403) blocked.set(url, Date.now() + 10 * 60_000); continue; }
           const j = await res.json();
           if (j.error) { err = `${j.error.code} ${j.error.message}`; if (/not found|invalid/i.test(j.error.message) && !/personal token/.test(j.error.message)) continue; continue; }
           return j.result;

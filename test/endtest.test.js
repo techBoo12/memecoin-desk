@@ -90,3 +90,15 @@ test('startCampaign attaches the 14-day run to the running window, silently, onc
   assert.equal(sent.length, 0);
   assert.equal(engine.startCampaign({ days: 14, expectN: 2 }).ok, false);
 });
+
+import { makeRpc } from '../src/playbook/solana.js';
+test('archive rpc falls back to publicnode when mainnet-beta answers 403 (cloudflare), and skips the blocked one after', async () => {
+  const hits = [];
+  const fetchImpl = async (url) => { hits.push(url); if (url.includes('mainnet-beta')) return { ok: false, status: 403 }; return { ok: true, json: async () => ({ result: ['sig'] }) }; };
+  const rpc = makeRpc({ archive: true, fetchImpl });
+  assert.deepEqual(await rpc('getSignaturesForAddress', ['x']), ['sig']);
+  assert.deepEqual(hits, ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com']);
+  hits.length = 0;
+  await rpc('getTransaction', ['y']);
+  assert.deepEqual(hits, ['https://solana-rpc.publicnode.com']);
+});
