@@ -381,7 +381,7 @@ export default {
     }
     if (url.pathname.startsWith('/admin/')) {
       if (!same(req.headers.get('x-admin-key'), env.ADMIN_KEY)) return new Response('no', { status: 401 });
-      return stub.fetch('https://desk' + url.pathname, { method: req.method, body: req.method === 'POST' ? await req.text() : undefined });
+      return stub.fetch('https://desk' + url.pathname + url.search, { method: req.method, body: req.method === 'POST' ? await req.text() : undefined }); // search kept: /admin/devhist?dev=...
     }
     if (url.pathname === '/hook/smart' && req.method === 'POST') { // her Helius webhook (smart-wallet txs), auth = token derived from the admin key
       if (!env.ADMIN_KEY || !same(req.headers.get('authorization'), await hookToken(env.ADMIN_KEY))) return new Response('no', { status: 401 });
