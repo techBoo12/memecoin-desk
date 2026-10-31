@@ -129,6 +129,7 @@ export class Desk extends DurableObject {
     }
     if (url.pathname === '/tg') { await this.onTelegram(await req.json()); return new Response('ok'); }
     if (url.pathname === '/admin/init' && req.method === 'POST') return this.init(await req.json());
+    if (url.pathname === '/admin/endtest' && req.method === 'POST') return this.endTest(await req.json());
     if (url.pathname === '/dash') return json(dashData(this.S, this.config, this.health()));
     if (url.pathname === '/admin/state') return json({ S: { ...this.S, _dirty: undefined }, outbox: this.outbox.length, sent: this.sentLog || [], config: this.config });
     return json(this.health());
@@ -156,6 +157,18 @@ export class Desk extends DurableObject {
     await this.save(true);
     await this.ctx.storage.setAlarm(Date.now() + 500);
     return json({ ok: true, test: t, equity: equity(this.S.desk), open: this.S.desk.positions.map((p) => p.symbol) });
+  }
+
+  // her call: end the running window early (report kept), start the next one now, one telegram note
+  async endTest({ hours = 24, stoppedAt, text, sentAt, expectN, announce, where = 'cloudflare' }) {
+    const r = this.engine.endTestEarly({ hours, stoppedAt, text, sentAt, expectN });
+    if (!r.ok) return json(r, 409);
+    const t = r.test;
+    this.notify('test', [announce, alert.testStartAlert({ equity: equity(this.S.desk), config: this.config, hours: t.hours, where, endsAt: t.endsAt })].filter(Boolean).join('\n\n').slice(0, 4000));
+    this.S.timers.nextScan = 0; this.S.timers.nextWatch = 0;
+    await this.save(true);
+    await this.ctx.storage.setAlarm(Date.now() + 500);
+    return json({ ok: true, report: { n: r.report.n, at: new Date(r.report.at).toISOString(), early: true, hoursRun: r.report.hoursRun }, test: { ...t, startedAt: new Date(t.startedAt).toISOString(), endsAt: new Date(t.endsAt).toISOString() } });
   }
 
   async reply(chatId, text) {

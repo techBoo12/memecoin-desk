@@ -362,6 +362,29 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
       dirty('desk', 'run');
       return st.test;
     },
+    // her call (Oct 31): stop the running window before its end, keep every trade, write the partial report,
+    // and open the next window at once. `text` + `sentAt` = the report already went out (sent just before a deploy);
+    // without them the report is written now and queued for telegram. expectN guards against a double call.
+    endTestEarly({ hours, reason = 'stopped early at the owner\'s request', stoppedAt, text, sentAt, expectN } = {}) {
+      const t = st.test;
+      if (!t) return { ok: false, why: 'no test window running' };
+      if (expectN != null && (t.n || 1) !== expectN) return { ok: false, why: `window is #${t.n || 1}, not #${expectN}` };
+      const at = Math.min(stoppedAt || now(), now());
+      const ranH = Math.max(0, (at - t.startedAt) / 3.6e6);
+      let body = text;
+      if (!body) {
+        body = `⏹ stopped early at your request · ${ranH.toFixed(1)}h of ${t.hours}h\n` + testReportText({ S, config, now: at });
+        notify('report', body.slice(0, 4000), { force: true });
+      }
+      t.reportSentAt = sentAt || now(); t.stoppedEarlyAt = at; t.stoppedEarly = reason;
+      st.reports = [...(st.reports || []), { at: sentAt || now(), n: t.n || 1, text: body, early: true, hoursRun: +ranH.toFixed(2), stoppedAt: at }].slice(-7);
+      ev('report', {}, `■ ${t.hours}H REPORT #${t.n || 1} (stopped early after ${ranH.toFixed(1)}h)`);
+      const h = hours || t.hours || 24;
+      st.test = { startedAt: now(), endsAt: now() + h * 3.6e6, hours: h, n: (t.n || 1) + 1, equityAtStart: equity(st), closedAtStart: st.closed.length, reportSentAt: null };
+      S.run = newRun(); Object.assign(run, S.run); S.run = run;
+      dirty('desk', 'run');
+      return { ok: true, report: st.reports[st.reports.length - 1], test: st.test };
+    },
     pause() { st.paused = { at: new Date(now()).toISOString(), by: 'owner' }; dirty('desk'); ev('freeze', {}, '⏸ PAUSED by owner from telegram. stops still run'); },
     resume() { st.paused = null; dirty('desk'); ev('info', {}, '▶ RESUMED by owner from telegram'); },
   };
