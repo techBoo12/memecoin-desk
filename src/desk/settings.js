@@ -39,6 +39,11 @@ export const SETTINGS = {
   insideralerts: { path: 'playbook.alerts.enabled', bool: true, label: 'insider alerts: dev crew loading / dumping a fresh coin (max a few per hour)' },
   copyon:      { path: 'playbook.copy.enabled', bool: true, label: 'copy lane: paper-buy when smart wallets pile into a fresh coin (own book) on/off' },
   copyk:       { path: 'playbook.copy.min_wallets', min: 2, max: 6, int: true, label: 'copy lane: how many smart wallets must buy within the window' },
+  // day 6: Meteora discovery for the desk + the hype lane
+  meteora:     { path: 'scout.meteora', bool: true, label: 'desk also scans Meteora pairs ($TRUMP-style launches) on/off' },
+  hypeon:      { path: 'hype.enabled', bool: true, label: 'hype lane (trend-matched coins, own paper book) on/off' },
+  hypebig:     { path: 'hype.big_name.enabled', bool: true, label: 'hype lane: big-name exception (huge coin, team holds a lot, quarter size) on/off' },
+  hypesize:    { path: 'hype.position_usd', min: 1, max: 20, unit: '$', label: 'hype lane: paper size per trade' },
   alerts:      { path: 'telegram.alertLevel', choices: ['all', 'trades'], label: 'alerts: all, or trades only (no scan digests / picks)' },
 };
 // mode is deliberately missing: paper stays paper.

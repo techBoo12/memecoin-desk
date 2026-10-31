@@ -33,6 +33,7 @@ export async function scout({ config, log, scanNo = 0, between = async () => {} 
   const per = cfg.searchQueriesPerScan || cfg.searchQueries.length;
   const start = (scanNo * per) % cfg.searchQueries.length;
   const queries = [...cfg.searchQueries, ...cfg.searchQueries].slice(start, start + per);
+  if (cfg.meteora) queries.unshift('meteora'); // day 6: Meteora pairs (DLMM / DAMM v2) every scan, one extra free DexScreener call
   for (const q of queries) {
     const r = await getJSON(`${DS}/latest/dex/search?q=${encodeURIComponent(q)}`, { minGapMs: 300 }); await between();
     for (const p of r.data?.pairs || []) if (p.chainId === 'solana') { directPairs.push(p); mints.add(p.baseToken.address); }
@@ -63,7 +64,7 @@ export async function scout({ config, log, scanNo = 0, between = async () => {} 
   // best pair per token, on an allowed dex
   const best = new Map();
   for (const p of pairs) {
-    if (p.chainId !== 'solana' || !cfg.dexes.includes(p.dexId)) continue;
+    if (p.chainId !== 'solana' || !(cfg.dexes.includes(p.dexId) || (cfg.meteora && p.dexId === 'meteora'))) continue;
     const mint = p.baseToken?.address;
     if (!mint || mint.endsWith('11111111111111111111111111111112')) continue;
     const prev = best.get(mint);

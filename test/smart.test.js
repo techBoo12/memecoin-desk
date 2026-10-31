@@ -205,7 +205,7 @@ test('copy lane off: a signal is logged as a skip, nothing is bought; non-list w
 
 test('worker: webhook route checks the derived auth, admin/smart + smart-hook routes exist, parts persisted', () => {
   const src = fs.readFileSync(new URL('../src/cloudflare/worker.js', import.meta.url), 'utf8');
-  assert.match(src, /'\/hook\/smart'/); assert.match(src, /hookToken\(env\.ADMIN_KEY\)/); assert.match(src, /'copy', 'smart'\]/);
+  assert.match(src, /'\/hook\/smart'/); assert.match(src, /hookToken\(env\.ADMIN_KEY\)/); assert.match(src, /'copy', 'smart'/);
   assert.match(src, /chargeKeyed\(txs\.length\)/); assert.match(src, /hook_budget_day/);
   const tool = fs.readFileSync(new URL('../tools/smart_wallets.mjs', import.meta.url), 'utf8');
   assert.ok(!/sendTransaction|signTransaction|secretKey|privateKey|Keypair/.test(tool + fs.readFileSync(new URL('../src/playbook/smart.js', import.meta.url), 'utf8')), 'reads only');
