@@ -18,18 +18,28 @@
 // A "smart wallet" is a statistical label from a small sample of past trades, not proof of skill.
 //
 // Usage (key only via env, never printed):
-//   HELIUS_RPC_URL=... node tools/smart_wallets.mjs [--days 2] [--max 30] [--budget 2500] [--push] [--hook]
+//   HELIUS_RPC_URL=... node tools/smart_wallets.mjs [--days 2] [--max 30] [--budget 2500] [--candidates 100]
+//        [--max-idle-h 12] [--prechecks 300] [--max-peak 1000] [--push] [--hook]
+//   Oct 31 fix: fake fund / fake dollar "winners" (USOE 42,385x, USDP 8,533x ...) are dropped by the sanity checks in
+//   src/playbook/smart_list.js (name lookalike, peak cap, fdv/liquidity, buy/sell skew, pinned price, clones), and a
+//   wallet must have traded in the last --max-idle-h hours (1-credit signature pre-check, then its own trades).
+//   The whole run, webhook update included, stays inside --budget credits.
 //   --push  POST the list to the worker (/admin/smart, admin key from state/cloudflare.json)
 //   --hook  create/update her ONE free Helius webhook so the smart wallets' txs are pushed to the worker
 // Writes state/smart_wallets.json (gitignored state dir).
 // ============================================================================
 import fs from 'node:fs';
 import { parseMigration, earlyBuyers, walletStats, scoreWallet, pickList, hookToken, short, keysOf } from '../src/playbook/smart.js';
+import { winnerSanity, taintClones, lastTradeAt, recencyGate, newestOkSig, SANITY } from '../src/playbook/smart_list.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : (process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : true); };
 const DAYS = Number(arg('days', 2)), MAX = Number(arg('max', 30)), WINX = Number(arg('winx', 5)), EARLY_MIN = Number(arg('early-min', 10));
-const CREDIT_BUDGET = Number(arg('budget', 2500)), HOOK_BUDGET = Number(arg('hook-budget', 2500)), CANDS = Number(arg('candidates', 60)), WIN_CAP = Number(arg('winners', 40));
+const CREDIT_BUDGET = Number(arg('budget', 2500)), HOOK_BUDGET = Number(arg('hook-budget', 2500)), CANDS = Number(arg('candidates', 100)), WIN_CAP = Number(arg('winners', 40));
 const SCORE_DAYS = Number(arg('score-days', 7)), WALLET_PAGE = Number(arg('wallet-page', 200));
+// Oct 31 fix: wallets idle longer than this are no use to the copy lane today; a 1-credit signature pre-check
+// skips them before the 20-credit full read. Sanity caps on "winners" live in src/playbook/smart_list.js.
+const MAX_IDLE_H = Number(arg('max-idle-h', 12)), PRECHECKS = Number(arg('prechecks', 300)), MAX_PEAK = Number(arg('max-peak', SANITY.maxPeakX));
+const HOOK_RESERVE = arg('hook', false) === true ? 100 : 0; // the webhook update is inside the run's budget
 const MIN_GRAD_SOL = 40; // real graduations seed the pool with ~67+ SOL; the many 0.1-SOL "graduations" are spam
 const MIGRATION_ACCOUNT = '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg';
 const RPC = process.env.HELIUS_RPC_URL;
@@ -56,10 +66,17 @@ async function rpc(method, params) {
 async function gtfa(address, opts) {
   const lim = opts.limit || 100;
   const worst = Math.max(10, Math.ceil(lim / 100) * 10);
-  if (credits + worst > CREDIT_BUDGET) throw new Error(`credit budget ${CREDIT_BUDGET} reached`);
+  if (credits + worst > CREDIT_BUDGET - HOOK_RESERVE) throw new Error(`credit budget ${CREDIT_BUDGET} reached`);
   const r = await rpc('getTransactionsForAddress', [address, { transactionDetails: 'full', maxSupportedTransactionVersion: 1, ...opts }]);
   const n = r?.data?.length || 0; const c = Math.max(10, Math.ceil(n / 100) * 10);
   credits += c; meter.gtfa += c;
+  return r;
+}
+// standard RPC call (1 credit on Helius), budget-guarded the same way
+async function std(method, params) {
+  if (credits + 1 > CREDIT_BUDGET - HOOK_RESERVE) throw new Error(`credit budget ${CREDIT_BUDGET} reached`);
+  const r = await rpc(method, params);
+  credits += 1; meter.std += 1;
   return r;
 }
 const stat = { gt429: 0, gtOk: 0 };
@@ -91,10 +108,14 @@ async function main() {
   for (let i = 0; i < real.length; i += 30) {
     const batch = real.slice(i, i + 30);
     const d = await getJSON(`https://api.dexscreener.com/tokens/v1/solana/${batch.map((m) => m.mint).join(',')}`, { gapMs: 250 });
-    for (const p of d || []) { const m = migs.get(p.baseToken?.address); if (!m || p.pairAddress !== m.pool) continue; cur[m.mint] = { priceSol: Number(p.priceNative) || 0, vol24: p.volume?.h24 || 0, symbol: p.baseToken.symbol, fdv: p.fdv || 0, liq: p.liquidity?.usd || 0 }; }
+    for (const p of d || []) { const m = migs.get(p.baseToken?.address); if (!m || p.pairAddress !== m.pool) continue; cur[m.mint] = { priceSol: Number(p.priceNative) || 0, vol24: p.volume?.h24 || 0, symbol: p.baseToken.symbol, name: p.baseToken.name || '', fdv: p.fdv || 0, liq: p.liquidity?.usd || 0, buys24: p.txns?.h24?.buys || 0, sells24: p.txns?.h24?.sells || 0 }; }
   }
-  for (const m of real) { m.symbol = cur[m.mint]?.symbol || m.mint.slice(0, 4); m.nowX = cur[m.mint] ? cur[m.mint].priceSol / m.priceSol : null; m.vol24 = cur[m.mint]?.vol24 || 0; }
-  const peekList = real.filter((m) => (m.nowX ?? 0) >= 1.5 || m.vol24 >= 250_000).sort((a, b) => (b.nowX ?? 0) - (a.nowX ?? 0)).slice(0, Number(arg('peak-checks', 30)));
+  for (const m of real) { const c = cur[m.mint] || {}; Object.assign(m, { symbol: c.symbol || m.mint.slice(0, 4), name: c.name || '', nowX: c.priceSol ? c.priceSol / m.priceSol : null, vol24: c.vol24 || 0, fdv: c.fdv || 0, liq: c.liq || 0, buys24: c.buys24 || 0, sells24: c.sells24 || 0 }); }
+  // sanity BEFORE the peak checks (name, current price cap, fdv/liquidity, buy/sell skew) so fakes don't eat the
+  // limited GeckoTerminal checks; the pinned-at-peak check runs again after the peak is known
+  const flagged = new Map(); // mint -> { symbol, x, why }
+  const sane = (m) => { const why = winnerSanity({ ...m, peakX: m.peakX ?? null }, t0, { maxPeakX: MAX_PEAK }); if (why && Math.max(m.peakX ?? 0, m.nowX ?? 0) >= WINX) flagged.set(m.mint, { symbol: m.symbol, name: m.name, mint: m.mint, x: +Math.max(m.peakX ?? 0, m.nowX ?? 0).toFixed(1), why }); return !why; };
+  const peekList = real.filter(sane).filter((m) => (m.nowX ?? 0) >= 1.5 || m.vol24 >= 250_000).sort((a, b) => (b.nowX ?? 0) - (a.nowX ?? 0)).slice(0, Number(arg('peak-checks', 40)));
   log(`candidates for a peak check: ${peekList.length} (now >= 1.5x or 24h vol >= $250k)`);
   for (const m of peekList) {
     if (stat.gt429 >= 6) { m.peakX = null; continue; } // geckoterminal keeps refusing: fall back to the current price for the rest
@@ -104,7 +125,13 @@ async function main() {
     // currency=token -> candles priced in the quote token (SOL) for a token/SOL pool
     m.peakX = highs.length ? Math.max(...highs) / m.priceSol : null;
   }
-  const winners = real.filter((m) => Math.max(m.peakX ?? 0, m.nowX ?? 0) >= WINX).sort((a, b) => Math.max(b.peakX ?? 0, b.nowX ?? 0) - Math.max(a.peakX ?? 0, a.nowX ?? 0)).slice(0, WIN_CAP);
+  const flaggedSyms = () => new Set([...flagged.values()].map((f) => f.symbol));
+  let winners = real.filter((m) => !flagged.has(m.mint) && sane(m) && Math.max(m.peakX ?? 0, m.nowX ?? 0) >= WINX);
+  const preClone = winners.length;
+  winners = taintClones(winners, flaggedSyms());
+  for (const m of real) if (!flagged.has(m.mint) && Math.max(m.peakX ?? 0, m.nowX ?? 0) >= WINX && flaggedSyms().has(m.symbol) && !winners.includes(m)) flagged.set(m.mint, { symbol: m.symbol, name: m.name, mint: m.mint, x: +Math.max(m.peakX ?? 0, m.nowX ?? 0).toFixed(1), why: `clone of a flagged $${m.symbol}` });
+  log(`flagged as fake / unbelievable: ${flagged.size} (${preClone - winners.length} clones): ${[...flagged.values()].slice(0, 12).map((f) => `$${f.symbol} ${f.x}x`).join(', ')}`);
+  winners = winners.sort((a, b) => Math.max(b.peakX ?? 0, b.nowX ?? 0) - Math.max(a.peakX ?? 0, a.nowX ?? 0)).slice(0, WIN_CAP);
   log(`peak checks: ${stat.gtOk} ok, ${stat.gt429} refused (429)`);
   log(`winners (>= ${WINX}x the migration price): ${winners.length}: ${winners.map((w) => `$${w.symbol} ${Math.max(w.peakX ?? 0, w.nowX ?? 0).toFixed(1)}x`).join(', ')}`);
 
@@ -118,8 +145,20 @@ async function main() {
       for (const b of eb) { const h = hits.get(b.wallet) || { wallet: b.wallet, winners: [], sol: 0 }; h.winners.push(w.symbol); h.sol += b.sol; hits.set(b.wallet, h); }
     } catch (e) { log(`early buyers $${w.symbol}: ${e.message}`); if (/budget/.test(e.message)) break; }
   }
-  const cands = [...hits.values()].sort((a, b) => b.winners.length - a.winners.length || b.sol - a.sol).slice(0, CANDS);
-  log(`early buyers across winners: ${hits.size} wallets · in 2+ winners: ${[...hits.values()].filter((h) => h.winners.length > 1).length} · scoring ${cands.length} · credits ${credits}`);
+  const ranked = [...hits.values()].sort((a, b) => b.winners.length - a.winners.length || b.sol - a.sol);
+  // 4. recency pre-check: newest successful signature (1 credit each). Idle wallets are skipped before the full read.
+  const cands = [], idle = { checked: 0, idle: 0, failed: 0 };
+  for (const h of ranked) {
+    if (cands.length >= CANDS || idle.checked >= PRECHECKS) break;
+    try {
+      const sigs = await std('getSignaturesForAddress', [h.wallet, { limit: 10 }]);
+      idle.checked++;
+      const last = newestOkSig(sigs);
+      if (!recencyGate(last, t0, MAX_IDLE_H).ok) { idle.idle++; continue; }
+      h.lastSigAt = last; cands.push(h);
+    } catch (e) { if (/budget/.test(e.message)) break; idle.failed++; }
+  }
+  log(`early buyers across winners: ${hits.size} wallets · in 2+ winners: ${[...hits.values()].filter((h) => h.winners.length > 1).length} · pre-checked ${idle.checked}, idle > ${MAX_IDLE_H}h: ${idle.idle} · scoring ${cands.length} · credits ${credits}`);
 
   // 5. score each candidate on its own recent trades
   const scored = [], rejected = {}, table = [];
@@ -128,8 +167,12 @@ async function main() {
       const r = await gtfa(c.wallet, { limit: WALLET_PAGE, sortOrder: 'desc', filters: { blockTime: { gte: nowS - SCORE_DAYS * 86400 }, status: 'succeeded' } });
       const s = walletStats(r.data || [], c.wallet);
       if ((r.data || []).length >= WALLET_PAGE) s.partial = true; // page full: busier than WALLET_PAGE txs in SCORE_DAYS, span measured from the page
-      const g = scoreWallet(s);
-      table.push({ w: c.wallet, winners: c.winners.length, closed: s.closed, winRate: s.winRate, pnlSol: s.pnlSol, roiPct: s.roiPct, txPerDay: s.txPerDay, spanDays: s.spanDays, medianHoldMin: s.medianHoldMin, verdict: g.ok ? 'kept' : g.why });
+      s.lastTradeAt = lastTradeAt(r.data || [], c.wallet);
+      const rg = recencyGate(s.lastTradeAt, Date.now(), MAX_IDLE_H); // the signature may have been a non-trade tx
+      s.idleH = rg.idleH ?? null;
+      const g0 = scoreWallet(s);
+      const g = g0.ok && !rg.ok ? { ok: false, why: rg.why } : g0;
+      table.push({ w: c.wallet, winners: c.winners.length, closed: s.closed, winRate: s.winRate, pnlSol: s.pnlSol, roiPct: s.roiPct, txPerDay: s.txPerDay, spanDays: s.spanDays, medianHoldMin: s.medianHoldMin, idleH: s.idleH, verdict: g.ok ? 'kept' : g.why });
       if (g.ok) scored.push({ ...s, score: g.score, winnersHit: c.winners, earlySol: +c.sol.toFixed(2) });
       else { const k = g.why.replace(/[\d.]+/g, 'N'); rejected[k] = (rejected[k] || 0) + 1; }
     } catch (e) { if (/budget/.test(e.message)) { log('credit budget reached while scoring, stopping'); break; } }
@@ -138,17 +181,18 @@ async function main() {
   log(`passed the gate: ${scored.length} · kept: ${pick.list.length} · expected webhook load ${pick.expectedEventsDay} txs/day · credits used ${credits}`);
   const out = {
     builtAt: new Date().toISOString(), tookS: Math.round((Date.now() - t0) / 1000), credits, meter, solUsd: Number(sol) || null,
-    params: { days: DAYS, winx: WINX, earlyMin: EARLY_MIN, scoreDays: SCORE_DAYS, walletPage: WALLET_PAGE, max: MAX, hookBudgetDay: HOOK_BUDGET, creditBudget: CREDIT_BUDGET },
-    counts: { graduates: migs.size, realGraduates: real.length, peakChecked: peekList.length, winners: winners.length, earlyBuyers: hits.size, scored: cands.length, passed: scored.length, kept: pick.list.length, rejected },
+    params: { days: DAYS, winx: WINX, maxPeakX: MAX_PEAK, maxIdleH: MAX_IDLE_H, prechecks: PRECHECKS, candidates: CANDS, sanity: SANITY, earlyMin: EARLY_MIN, scoreDays: SCORE_DAYS, walletPage: WALLET_PAGE, max: MAX, hookBudgetDay: HOOK_BUDGET, creditBudget: CREDIT_BUDGET },
+    counts: { graduates: migs.size, realGraduates: real.length, peakChecked: peekList.length, flagged: flagged.size, winners: winners.length, precheck: idle, earlyBuyers: hits.size, scored: cands.length, passed: scored.length, kept: pick.list.length, rejected },
     expectedEventsDay: pick.expectedEventsDay,
+    flagged: [...flagged.values()],
     winners: winners.map((w) => ({ symbol: w.symbol, mint: w.mint, pool: w.pool, migratedAt: new Date(w.at).toISOString(), peakX: w.peakX && +w.peakX.toFixed(1), nowX: w.nowX && +w.nowX.toFixed(1), earlyBuyers: w.earlyBuyers ?? null })),
     candidates: table,
-    list: pick.list.map((s) => ({ w: s.wallet, score: s.score, winRate: s.winRate, closed: s.closed, wins: s.wins, pnlSol: s.pnlSol, spentSol: s.spentSol, roiPct: s.roiPct, txPerDay: s.txPerDay, spanDays: s.spanDays, partial: Boolean(s.partial), medianHoldMin: s.medianHoldMin, winnersHit: s.winnersHit, earlySol: s.earlySol })),
+    list: pick.list.map((s) => ({ w: s.wallet, score: s.score, winRate: s.winRate, closed: s.closed, wins: s.wins, pnlSol: s.pnlSol, spentSol: s.spentSol, roiPct: s.roiPct, txPerDay: s.txPerDay, spanDays: s.spanDays, partial: Boolean(s.partial), medianHoldMin: s.medianHoldMin, lastTradeAt: s.lastTradeAt ? new Date(s.lastTradeAt).toISOString() : null, idleH: s.idleH, winnersHit: s.winnersHit, earlySol: s.earlySol })),
     note: 'statistical label from public on-chain trades (small sample, past only). not proof of skill or insider info. paper copy only.',
   };
   fs.mkdirSync(here + 'state', { recursive: true });
   fs.writeFileSync(here + 'state/smart_wallets.json', JSON.stringify(out, null, 1));
-  for (const s of out.list.slice(0, 15)) log(`  ${short(s.w)} score ${s.score} · win ${(s.winRate * 100).toFixed(0)}% of ${s.closed} · pnl ${s.pnlSol} SOL (${s.roiPct}% on ${s.spentSol} SOL) · ${s.txPerDay} tx/d · hit ${s.winnersHit.join(',')}`);
+  for (const s of out.list.slice(0, 15)) log(`  ${short(s.w)} score ${s.score} · win ${(s.winRate * 100).toFixed(0)}% of ${s.closed} · pnl ${s.pnlSol} SOL (${s.roiPct}% on ${s.spentSol} SOL) · ${s.txPerDay} tx/d · last trade ${s.idleH}h ago · hit ${s.winnersHit.join(',')}`);
 
   const cf = fs.existsSync(here + 'state/cloudflare.json') ? JSON.parse(fs.readFileSync(here + 'state/cloudflare.json', 'utf8')) : null;
   if (arg('hook', false) === true) {
