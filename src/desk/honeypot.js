@@ -9,6 +9,21 @@
 // HARD STOP: quotes only. No wallet, no signature, no transaction, ever.
 // ============================================================================
 import { getJSON, SOL_MINT } from '../lib/http.js';
+import { rpc } from '../playbook/solana.js';
+
+// day 5 fix: decimals straight from the mint account when rugcheck doesn't say (BONK has 5, not 6:
+// a wrong guess made the 3s watcher see a 10x lower price than the entry and fire a false stop)
+const decCache = new Map();
+export async function mintDecimals(mint, rc) {
+  if (Number.isInteger(rc?.token?.decimals)) return rc.token.decimals;
+  if (decCache.has(mint)) return decCache.get(mint);
+  try {
+    const a = await rpc('getAccountInfo', [mint, { encoding: 'jsonParsed' }]);
+    const d = a?.value?.data?.parsed?.info?.decimals;
+    if (Number.isInteger(d)) { decCache.set(mint, d); return d; }
+  } catch { /* unknown */ }
+  return null;
+}
 
 const JUP = 'https://lite-api.jup.ag/swap/v1/quote';
 let solCache = { at: 0, usd: 0 };
@@ -52,16 +67,18 @@ export async function honeypotCheck(candidate, rc, { config }) {
   if (sell.failed) return { ok: false, reason: 'CAN\'T SELL: no sell route (honeypot?)' };
 
   const back = Number(sell.outAmount);
+  const dec = await mintDecimals(candidate.mint, rc);
+  if (dec == null) return { ok: false, unknown: true, reason: 'token decimals unknown (rugcheck + chain both silent), skipped' };
   const roundTripLossPct = (1 - back / lamports) * 100;
   const impactPct = Math.max(Number(buy.priceImpactPct) || 0, Number(sell.priceImpactPct) || 0) * 100;
   const out = {
     testUsd: cfg.testSizeUsd,
     roundTripLossPct: +roundTripLossPct.toFixed(2),
     impactPct: +impactPct.toFixed(2),
-    decimals: rc?.token?.decimals ?? 6,
+    decimals: dec,
     route: buy.routePlan?.map((r) => r.swapInfo?.label).join(' > '),
     // effective entry price incl. pool fees + impact: what a real fill would look like
-    fillPriceUsd: (lamports / 1e9) * sol / (Number(buy.outAmount) / 10 ** (rc?.token?.decimals ?? 6)),
+    fillPriceUsd: (lamports / 1e9) * sol / (Number(buy.outAmount) / 10 ** dec),
   };
   if (roundTripLossPct > cfg.maxRoundTripLossPct) return { ok: false, reason: `sell tax/loss ${out.roundTripLossPct}% on a $${cfg.testSizeUsd} round trip`, ...out };
   if (impactPct > cfg.maxPriceImpactPct) return { ok: false, reason: `price impact ${out.impactPct}% too high`, ...out };

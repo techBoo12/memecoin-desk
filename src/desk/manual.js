@@ -12,7 +12,7 @@
 // HARD STOP: paper only. No wallet, no keys, no signer, no swap. Quotes only.
 // ============================================================================
 import { filter, usd } from './filter.js';
-import { honeypotCheck, quote, solPriceUsd } from './honeypot.js';
+import { honeypotCheck, quote, solPriceUsd, mintDecimals } from './honeypot.js';
 import { analyze } from './analyst.js';
 import { qualityGate } from './quality.js';
 import { refreshPairs } from './scout.js';
@@ -53,7 +53,7 @@ export async function checkToken(mint, { config, S, net = NET, now = Date.now() 
   return {
     ok: true, at: now, mint, symbol: c.symbol, name: c.name, url: c.url, priceUsd: c.priceUsd,
     mcap: c.mcap, liq: c.liqUsd, ageMin: c.ageMin, change: c.change,
-    decimals: hp.decimals ?? f.rc?.token?.decimals ?? 6,
+    decimals: hp.decimals ?? (await mintDecimals(mint, f.rc)) ?? 6, // day 5: from the chain when rugcheck is silent
     rulesPassed: 8 - bad.length,
     sellTest: hp.ok ? `ok: $${hp.testUsd} round trip -${hp.roundTripLossPct}%, impact ${hp.impactPct}%` : hp.reason,
     sellOk: Boolean(hp.ok),

@@ -224,7 +224,7 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       for (const s of sigs) {
         if (pb.checkedSigs.includes(s.signature)) continue;
         pb.checkedSigs.push(s.signature); if (pb.checkedSigs.length > 50) pb.checkedSigs.shift();
-        const tx = await rio.rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0 }]);
+        const tx = await rio.rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 }]);
         if (!tx) continue;
         for (const [owner, d] of Object.entries(tokenDeltas(tx, pos.mint))) {
           if (d.delta <= 0n || owner === pb.pool || BURN_OWNERS.has(owner) || pb.tokenAccounts[d.ta]) continue;
