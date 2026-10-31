@@ -213,6 +213,11 @@
       60,
       1440
     ],
+    "keyed_rpc": {
+      "_note": "her free Helius key (worker secret HELIUS_RPC_URL) goes first while today's budget lasts. free plan = 1M credits/month, 1 credit per call -> 30000 a UTC day; above soft_pct only open-position watching uses it",
+      "daily_cap": 30000,
+      "soft_pct": 80
+    },
     "free_data_caps": {
       "sigPages": 10,
       "earlyTx": 40,

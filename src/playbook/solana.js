@@ -25,13 +25,34 @@ const ARCHIVE = ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publ
 const blocked = new Map(); // url -> until: an endpoint that answered 403 is skipped for 10 min (saves a subrequest per call on the free plan)
 const HISTORY_METHODS = new Set(['getSignaturesForAddress', 'getTransaction', 'getAccountInfo', 'getSlot']);
 
+// Her own free Helius key (Oct 31 2026: the free gateways above refuse Cloudflare Workers, so the lane was blind).
+// Set from the worker secret HELIUS_RPC_URL; never logged. It goes FIRST in every list while today's credit budget lasts:
+// the free plan is 1M credits a month (1 credit per standard/archival call), so the default cap is 30,000 calls a UTC day.
+// Above soft_pct of the cap only priority calls (watching an open insider position) may use it; the rest fall back to the free list.
+const keyed = { url: null, cap: 30000, softPct: 80, ledger: { day: '', used: 0, denied: 0 } };
+export function setKeyedRpc(url, { dailyCap, softPct } = {}) {
+  keyed.url = url || null;
+  if (dailyCap > 0) keyed.cap = dailyCap;
+  if (softPct > 0) keyed.softPct = softPct;
+}
+export function bindKeyedLedger(ledger) { if (ledger) keyed.ledger = ledger; return keyed.ledger; }
+export function keyedStatus() { return { on: Boolean(keyed.url), cap: keyed.cap, softPct: keyed.softPct, ...keyed.ledger }; }
+function keyedAllowed(priority) {
+  if (!keyed.url) return false;
+  const L = keyed.ledger, day = new Date().toISOString().slice(0, 10);
+  if (L.day !== day) { L.day = day; L.used = 0; L.denied = 0; }
+  if (L.used >= (priority ? keyed.cap : (keyed.cap * keyed.softPct) / 100)) { L.denied++; return false; }
+  return true;
+}
+
 export const rpcStats = { calls: 0, errors: 0, byMethod: {} };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function makeRpc({ archive = false, minGapMs = 0, fetchImpl = fetch } = {}) {
   let last = 0;
-  return async function rpc(method, params, { timeoutMs = 12000 } = {}) {
-    const all = archive ? ARCHIVE : method === 'getTokenLargestAccounts' ? LARGEST : HISTORY_METHODS.has(method) ? HISTORY : STATE;
+  return async function rpc(method, params, { timeoutMs = 12000, priority = false } = {}) {
+    const free = archive ? ARCHIVE : method === 'getTokenLargestAccounts' ? LARGEST : HISTORY_METHODS.has(method) ? HISTORY : STATE;
+    const all = keyedAllowed(priority) ? [keyed.url, ...free] : free;
     const open = all.filter((u) => !(blocked.get(u) > Date.now()));
     const list = open.length ? open : all;
     let err;
@@ -39,6 +60,7 @@ export function makeRpc({ archive = false, minGapMs = 0, fetchImpl = fetch } = {
       for (const url of list) {
         if (minGapMs) { const w = last + minGapMs - Date.now(); last = Math.max(Date.now(), last + minGapMs); if (w > 0) await sleep(w); }
         rpcStats.calls++; rpcStats.byMethod[method] = (rpcStats.byMethod[method] || 0) + 1;
+        if (url === keyed.url) keyed.ledger.used++;
         try {
           const res = await fetchImpl(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout(timeoutMs) });
           if (!res.ok) { err = `HTTP ${res.status}`; if (res.status === 403) blocked.set(url, Date.now() + 10 * 60_000); continue; }

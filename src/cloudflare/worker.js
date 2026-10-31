@@ -14,6 +14,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import CONFIG from '../../config.json'; // the same config.json as the Node desk (bundled by wrangler)
 import { createEngine } from '../desk/engine.js';
+import { setKeyedRpc } from '../playbook/solana.js';
 import { equity, riskStatus } from '../desk/risk.js';
 import { applyOverrides, changeSetting, stepSetting } from '../desk/settings.js';
 import { checkToken, manualBuy, manualSell } from '../desk/manual.js';
@@ -51,6 +52,8 @@ export class Desk extends DurableObject {
     this.outbox = got.get('outbox') || [];
     this.config = structuredClone(CONFIG);
     applyOverrides(this.config, this.overrides);
+    const kr = this.config.playbook?.keyed_rpc || {};
+    setKeyedRpc(this.env.HELIUS_RPC_URL, { dailyCap: kr.daily_cap, softPct: kr.soft_pct }); // secret; the lane's free list stays as fallback
     this.engine = createEngine({ config: this.config, S: this.S, log, notify: (k, t, o) => this.notify(k, t, o) });
     this.client = this.env.TELEGRAM_BOT_TOKEN ? createTelegramClient({ token: this.env.TELEGRAM_BOT_TOKEN, timeoutMs: 8000, apiBase: this.env.TG_API_BASE }) : null;
     this.lock = { ownerChatId: this.env.OWNER_CHAT_ID ? Number(this.env.OWNER_CHAT_ID) : null };

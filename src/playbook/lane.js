@@ -8,7 +8,7 @@
 // Paper only. Reads only. One unit of work per call so a Worker invocation stays small.
 // ============================================================================
 import { newBuild, stepBuild } from './gather.js';
-import { makeRpc, jitoBundleOf, jitoBundleTxs, jitoTipFloorSol, tokenDeltas, BURN_OWNERS, PUMPSWAP_PROGRAM } from './solana.js';
+import { makeRpc, bindKeyedLedger, jitoBundleOf, jitoBundleTxs, jitoTipFloorSol, tokenDeltas, BURN_OWNERS, PUMPSWAP_PROGRAM } from './solana.js';
 // pump.fun's migration account: it takes part in every graduation (seen in MELT's 46k migrations and live on Oct 31 2026)
 export const MIGRATION_ACCOUNT = '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg';
 import { rugChecks, riskChecks, secondOpinion, manipulationChecks, execChecks, decide, liquidityUsd } from './rules.js';
@@ -44,6 +44,7 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
   S.pb ||= newPlaybookState();
   S.labels ||= newLabelBook();
   const P = S.pb, st = S.desk;
+  bindKeyedLedger(P.keyed ||= { day: '', used: 0, denied: 0 }); // today's Helius calls, kept in state so a restart doesn't reset the count
   const insiderOpen = () => st.positions.filter((p) => p.strategy === 'insider');
   const counted = (fn) => async (...a) => { P.stats.rpcCalls++; return fn(...a); };
   const rio = { ...io, rpc: counted(io.rpc) };
@@ -222,7 +223,7 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
     const pb = pos.pb;
     const tas = Object.keys(pb.tokenAccounts).slice(0, 94);
     const keys = [pb.pool, pb.baseVault, pb.quoteVault, pos.mint, pb.lpMint, ...tas];
-    const r = await rio.rpc('getMultipleAccounts', [keys, { encoding: 'jsonParsed' }]);
+    const r = await rio.rpc('getMultipleAccounts', [keys, { encoding: 'jsonParsed' }], { priority: true });
     const v = r.value;
     const at = now();
     if (!v[0]) return { at, poolGone: true };
@@ -246,11 +247,11 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       const before = pb.lastBal[ta];
       if (before == null || a >= before || looked >= 2) continue;
       looked++;
-      const sigs = await rio.rpc('getSignaturesForAddress', [ta, { limit: 2 }]);
+      const sigs = await rio.rpc('getSignaturesForAddress', [ta, { limit: 2 }], { priority: true });
       for (const s of sigs) {
         if (pb.checkedSigs.includes(s.signature)) continue;
         pb.checkedSigs.push(s.signature); if (pb.checkedSigs.length > 50) pb.checkedSigs.shift();
-        const tx = await rio.rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 }]);
+        const tx = await rio.rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 }], { priority: true });
         if (!tx) continue;
         for (const [owner, d] of Object.entries(tokenDeltas(tx, pos.mint))) {
           if (d.delta <= 0n || owner === pb.pool || BURN_OWNERS.has(owner) || pb.tokenAccounts[d.ta]) continue;
