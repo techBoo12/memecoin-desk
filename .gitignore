@@ -6,3 +6,5 @@ logs/*.jsonl
 .dev.vars
 .wrangler/
 logs/
+backtest/*.jsonl
+backtest/*.log
