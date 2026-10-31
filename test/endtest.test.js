@@ -77,3 +77,16 @@ test('14-day run: every 24h report says day N of 14, day 14 adds the go/no-go, t
   assert.ok(S.desk.campaign.finalSentAt);
   assert.equal(S.desk.test.n, 17, 'still rolling 24h windows after day 14');
 });
+
+test('startCampaign attaches the 14-day run to the running window, silently, once', () => {
+  const { engine, S, sent } = setup();
+  engine.startTest(24); engine.endTestEarly({ expectN: 1, text: 'x', sentAt: Date.now() });
+  sent.length = 0;
+  assert.equal(engine.startCampaign({ days: 14, expectN: 3 }).ok, false);
+  const r = engine.startCampaign({ days: 14, expectN: 2 });
+  assert.equal(r.ok, true);
+  assert.equal(S.desk.campaign.firstN, 2);
+  assert.equal(S.desk.campaign.startedAt, S.desk.test.startedAt);
+  assert.equal(sent.length, 0);
+  assert.equal(engine.startCampaign({ days: 14, expectN: 2 }).ok, false);
+});

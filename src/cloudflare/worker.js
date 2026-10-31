@@ -130,6 +130,7 @@ export class Desk extends DurableObject {
     if (url.pathname === '/tg') { await this.onTelegram(await req.json()); return new Response('ok'); }
     if (url.pathname === '/admin/init' && req.method === 'POST') return this.init(await req.json());
     if (url.pathname === '/admin/endtest' && req.method === 'POST') return this.endTest(await req.json());
+    if (url.pathname === '/admin/campaign' && req.method === 'POST') { const b = await req.json(); const r = this.engine.startCampaign(b); if (r.ok) await this.save(true); return json(r, r.ok ? 200 : 409); }
     if (url.pathname === '/dash') return json(dashData(this.S, this.config, this.health()));
     if (url.pathname === '/admin/state') return json({ S: { ...this.S, _dirty: undefined }, outbox: this.outbox.length, sent: this.sentLog || [], config: this.config });
     return json(this.health());

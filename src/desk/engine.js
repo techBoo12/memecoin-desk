@@ -395,6 +395,16 @@ export function createEngine({ config, S, log, notify, now = () => Date.now(), p
       dirty('desk', 'run');
       return { ok: true, report: st.reports[st.reports.length - 1], test: st.test };
     },
+    // attach the 14-day run to the window that is already running (no message, no reset)
+    startCampaign({ days = 14, expectN } = {}) {
+      const t = st.test;
+      if (!t) return { ok: false, why: 'no test window running' };
+      if (expectN != null && (t.n || 1) !== expectN) return { ok: false, why: `window is #${t.n || 1}, not #${expectN}` };
+      if (st.campaign && !st.campaign.finalSentAt) return { ok: false, why: 'a run is already going', campaign: st.campaign };
+      st.campaign = { startedAt: t.startedAt, days, firstN: t.n || 1, windowHours: t.hours, finalAt: t.startedAt + days * t.hours * 3.6e6, finalSentAt: null, why: 'training pack 9.4: 14+ days of paper before any real money' };
+      dirty('desk');
+      return { ok: true, campaign: st.campaign };
+    },
     pause() { st.paused = { at: new Date(now()).toISOString(), by: 'owner' }; dirty('desk'); ev('freeze', {}, '⏸ PAUSED by owner from telegram. stops still run'); },
     resume() { st.paused = null; dirty('desk'); ev('info', {}, '▶ RESUMED by owner from telegram'); },
   };
