@@ -16,7 +16,9 @@ export const BURN_OWNERS = new Set(['1nc1nerator11111111111111111111111111111111
 // publicnode answers history fast but refuses "indexed" calls without a key and has no deep archive;
 // api.mainnet-beta has the archive + parsed account reads but rate-limits hard (≈100 req / 10 s per IP).
 const HISTORY = ['https://solana-rpc.publicnode.com', 'https://api.mainnet-beta.solana.com'];
-const STATE = ['https://api.mainnet-beta.solana.com', 'https://solana-rpc.publicnode.com'];
+const STATE = ['https://api.mainnet-beta.solana.com', 'https://solana-mainnet.gateway.tatum.io', 'https://solana-rpc.publicnode.com'];
+// getTokenLargestAccounts: mainnet-beta 403/429s it hard; Tatum's public gateway answered it keyless (checked Oct 31 2026)
+const LARGEST = ['https://solana-mainnet.gateway.tatum.io', 'https://api.mainnet-beta.solana.com'];
 const ARCHIVE = ['https://api.mainnet-beta.solana.com']; // only this one has the deep archive; a fallback would answer 'not found' for old txs
 const HISTORY_METHODS = new Set(['getSignaturesForAddress', 'getTransaction', 'getAccountInfo', 'getSlot']);
 
@@ -26,7 +28,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export function makeRpc({ archive = false, minGapMs = 0, fetchImpl = fetch } = {}) {
   let last = 0;
   return async function rpc(method, params, { timeoutMs = 12000 } = {}) {
-    const list = archive ? ARCHIVE : HISTORY_METHODS.has(method) ? HISTORY : STATE;
+    const list = archive ? ARCHIVE : method === 'getTokenLargestAccounts' ? LARGEST : HISTORY_METHODS.has(method) ? HISTORY : STATE;
     let err;
     for (let attempt = 0; attempt < (archive ? 6 : 2); attempt++) {
       for (const url of list) {

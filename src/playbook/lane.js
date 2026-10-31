@@ -8,7 +8,9 @@
 // Paper only. Reads only. One unit of work per call so a Worker invocation stays small.
 // ============================================================================
 import { newBuild, stepBuild } from './gather.js';
-import { makeRpc, jitoBundleOf, jitoBundleTxs, jitoTipFloorSol, tokenDeltas, BURN_OWNERS } from './solana.js';
+import { makeRpc, jitoBundleOf, jitoBundleTxs, jitoTipFloorSol, tokenDeltas, BURN_OWNERS, PUMPSWAP_PROGRAM } from './solana.js';
+// pump.fun's migration account: it takes part in every graduation (seen in MELT's 46k migrations and live on Oct 31 2026)
+export const MIGRATION_ACCOUNT = '39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg';
 import { rugChecks, riskChecks, secondOpinion, manipulationChecks, execChecks, decide, liquidityUsd } from './rules.js';
 import { firstTrigger } from './exits.js';
 import { estimateFeeSol, sizeInsider, kellyCapPct, paperCostUsd } from './fees.js';
@@ -61,11 +63,35 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
   const sol = async () => (solUsd = (await io.solPriceUsd()) || solUsd);
 
   // ---------- (a) detect: free polling, not a stream (pack wants Geyser/Bitquery streams: paid)
+  // source 1 (on-chain, exact): pump.fun's migration account signs/joins every graduation. One cheap call
+  // lists the latest ones; each new one is read once for its pool + mint + exact migration time.
+  async function discoverChain(found) {
+    const sigs = await rio.rpc('getSignaturesForAddress', [cfg.migration_account || MIGRATION_ACCOUNT, { limit: 25 }]);
+    let reads = 0;
+    for (const s of sigs) {
+      if (s.err || P.seen['sig:' + s.signature] || reads >= 4) continue;
+      P.seen['sig:' + s.signature] = now();
+      if (now() - (s.blockTime || 0) * 1000 > cfg.max_minutes_since_migration * 60_000) continue;
+      reads++;
+      const tx = await rio.rpc('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 }]);
+      const keys = (tx?.transaction?.message?.accountKeys || []).map((k) => (typeof k === 'string' ? k : k.pubkey));
+      if (!tx || tx.meta?.err || !keys.includes(PUMPSWAP_PROGRAM)) continue; // not a migration into PumpSwap
+      const post = tx.meta.postTokenBalances || [];
+      const wsolOwners = new Set(post.filter((b) => b.mint === SOL_MINT).map((b) => b.owner));
+      const base = post.find((b) => b.mint !== SOL_MINT && wsolOwners.has(b.owner) && Number(b.uiTokenAmount.amount) > 0);
+      if (!base) continue;
+      found.push({ mint: base.mint, pool: base.owner, symbol: base.mint.slice(0, 4), createdAt: (tx.blockTime || s.blockTime) * 1000, migrationSig: s.signature, src: 'chain' });
+    }
+  }
+
   async function discover() {
     P.timers.nextDiscover = now() + cfg.discover_every_s * 1000;
     const found = [];
-    for (const page of [1, 2]) {
+    try { await discoverChain(found); } catch (e) { ev('warn', {}, `insider discover (chain): ${String(e.message).slice(0, 80)}`); }
+    const gtOk = now() > (P.gtBackoffUntil || 0);
+    for (const page of gtOk ? [1, 2] : []) {
       const r = await io.getJSON(`https://api.geckoterminal.com/api/v2/networks/solana/new_pools?page=${page}&include=base_token`, { minGapMs: 2100, retries: 0, timeoutMs: 8000 });
+      if (!r.ok) { P.gtBackoffUntil = now() + 5 * 60_000; break; } // free tier said slow down (429): chain + DexScreener carry on
       for (const p of r.data?.data || []) {
         if (p.relationships?.dex?.data?.id !== 'pumpswap') continue;
         const mint = p.relationships.base_token.data.id.replace(/^solana_/, '');
@@ -79,7 +105,7 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       if (P.seen[f.pool]) continue;
       P.seen[f.pool] = now();
       if (now() - f.createdAt > cfg.max_minutes_since_migration * 60_000) continue; // older than the niche window: not ours, not counted
-      P.queue.push({ ...f, t0: now() }); P.stats.detected++; added++;
+      P.queue.push({ ...f, t0: now() }); P.stats.detected++; added++; P.stats.bySource = { ...(P.stats.bySource || {}), [f.src || 'api']: ((P.stats.bySource || {})[f.src || 'api'] || 0) + 1 };
     }
     for (const [k, t] of Object.entries(P.seen)) if (now() - t > 6 * 3.6e6) delete P.seen[k];
     if (P.queue.length > 12) for (const t of P.queue.splice(0, P.queue.length - 12)) skip(t, 'R14', 'queue full: too stale by the time we could read it');
@@ -94,7 +120,7 @@ export function createPlaybookLane({ config, S, now = () => Date.now(), ev, noti
       if (!tok) return 'pb_idle';
       const risk = decide(riskChecks({ killSwitch: killSwitchOn(), openInsider: insiderOpen().length, holdingMint: st.positions.some((p) => p.mint === tok.mint) }, cfg));
       if (!risk.ok) { skip(tok, risk.failed.code, risk.failed.note); return 'pb_skip'; }
-      P.build = newBuild({ mint: tok.mint, pool: tok.pool, symbol: tok.symbol, t0: tok.t0 });
+      P.build = newBuild({ mint: tok.mint, pool: tok.pool, symbol: tok.symbol, t0: tok.t0, migrationSig: tok.migrationSig || null, migratedAt: tok.migrationSig ? tok.createdAt : null });
     }
     const b = P.build;
     await stepBuild(b, rio, cfg, budget);

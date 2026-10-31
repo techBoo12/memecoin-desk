@@ -21,8 +21,8 @@ export const JITO_TIP_ACCOUNTS = new Set(['96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nm
   'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL', '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT']);
 const TXO = { encoding: 'jsonParsed', maxSupportedTransactionVersion: 1 };
 
-export function newBuild({ mint, pool, symbol = '?', t0 = Date.now(), migrationSig = null, historical = false }) {
-  return { mint, pool, symbol, t0, historical, stage: historical ? 'sigs' : 'pool', cursor: migrationSig, migrationSig, calls: 0,
+export function newBuild({ mint, pool, symbol = '?', t0 = Date.now(), migrationSig = null, migratedAt = null, historical = false }) {
+  return { mint, pool, symbol, t0, historical, migratedAt, stage: historical ? 'sigs' : 'pool', cursor: migrationSig, migrationSig, calls: 0,
     sigPages: 0, prevTail: [], earlyQueue: [], buys: [], sells: [], wallets: {}, walletQueue: [], hop2Queue: [], hop2Started: false,
     links: [], linkTas: {}, linkQueue: null, deployerSigs: null, notes: [], fail: null };
 }
@@ -45,6 +45,11 @@ export async function stepBuild(b, io, cfg, budget = 8) {
         if (!p || p.baseMint !== b.mint || p.quoteMint !== WSOL) return fail(b, 'R14', 'pool is not <token>/SOL');
         if (!p.coinCreator || p.coinCreator === SYSTEM) return fail(b, 'R14', 'no coin creator on the pool: not a pump.fun graduate');
         b.poolInfo = p; b.deployer = p.coinCreator; b.stage = 'migration'; b.migPages = 0; b.migCursor = null;
+        if (b.migratedAt && b.migrationSig) { // found on-chain from the migration tx itself: no need to page the pool
+          b.cursor = b.migrationSig; b.minutesSinceMigration = +((b.t0 - b.migratedAt) / 60000).toFixed(2);
+          if (b.minutesSinceMigration > cfg.max_minutes_since_migration) return fail(b, 'R14', `migrated ${b.minutesSinceMigration} min ago (> ${cfg.max_minutes_since_migration})`);
+          b.stage = 'sigs';
+        }
       } else if (b.stage === 'migration') {
         const page = await call('getSignaturesForAddress', [b.pool, { limit: 1000, ...(b.migCursor ? { before: b.migCursor } : {}) }]);
         if (page.length === 1000) { if (++b.migPages >= 3) return fail(b, 'R14', 'pool already has 3000+ txs: not fresh'); b.migCursor = page.at(-1).signature; continue; }
@@ -236,6 +241,8 @@ async function readState(b, io, cfg, exchanges, call, cap) {
     got.value.forEach((a, k) => { const amt = Number(a?.data?.parsed?.info?.tokenAmount?.amount || 0); const o = tas[chunk[k]]; taBal[chunk[k]] = amt; balances[o] = (balances[o] || 0) + amt; });
   }
   const supply = Number(mintInfo.supply);
+  const meta = mintInfo.extensions.find((e) => e.name === 'tokenMetadata')?.state;
+  if (meta?.symbol && (b.symbol === '?' || b.symbol === b.mint.slice(0, 4))) b.symbol = meta.symbol;
   b.result = {
     mintInfo, lpBurnedPct, reserves, priceSol: reserves.sol / (reserves.token / 10 ** (mintInfo.decimals ?? 6)),
     holders, holdersSource, top10Pct: holders ? top10Share(Object.entries(byOwner).map(([owner, amount]) => ({ owner, amount })), supply, exclude) : null,
